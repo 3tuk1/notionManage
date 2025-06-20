@@ -53,9 +53,11 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
             }
         elif key in page_data and key not in ["ファイル"]:
             properties[key] = page_data[key]
-    # アップロード列のファイルをファイル列にコピー（Notion hosted fileはtype=file, 外部はtype=external）
+
+    # アップロード列のファイルをファイル列にコピー
     file_objs = []
     embed_blocks = []
+
     if 'アップロード' in page_data:
         upload_prop = page_data['アップロード']
         if 'files' in upload_prop and upload_prop['files']:
@@ -63,6 +65,7 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                 file_name = file_info.get('name', 'ファイル')
                 notion_file_url = file_info.get('file', {}).get('url')
                 external_url = file_info.get('external', {}).get('url')
+
                 # ファイル列用
                 if notion_file_url:
                     file_objs.append({
@@ -76,55 +79,59 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                         "name": file_name,
                         "external": {"url": external_url}
                     })
-                # 埋め込みブロック用
-                # 動画
-                if notion_file_url and file_name.lower().endswith((".mp4", ".mov", ".avi", ".webm")):
-                    embed_blocks.append({
+
+                file_url = notion_file_url or external_url
+                if not file_url:
+                    continue
+
+                # 動画ファイル
+                if file_name.lower().endswith((".mp4", ".mov", ".avi", ".webm")):
+                    block = {
                         "object": "block",
                         "type": "video",
-                        "video": {"type": "file", "file": {"url": notion_file_url}}
-                    })
-                elif external_url and file_name.lower().endswith((".mp4", ".mov", ".avi", ".webm")):
-                    embed_blocks.append({
-                        "object": "block",
-                        "type": "video",
-                        "video": {"type": "external", "external": {"url": external_url}}
-                    })
-                # 画像
-                if notion_file_url and file_name.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp")):
-                    embed_blocks.append({
-                        "object": "block",
-                        "type": "image",
-                        "image": {"type": "file", "file": {"url": notion_file_url}}
-                    })
-                elif external_url and file_name.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp")):
-                    embed_blocks.append({
+                        "video": {
+                            "type": "external",
+                            "external": {"url": file_url}
+                        }
+                    }
+                    embed_blocks.append(block)
+
+                # 画像ファイル
+                elif file_name.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp")):
+                    block = {
                         "object": "block",
                         "type": "image",
-                        "image": {"type": "external", "external": {"url": external_url}}
-                    })
-                # 音声
-                if notion_file_url and file_name.lower().endswith((".mp3", ".wav", ".ogg", ".m4a")):
-                    embed_blocks.append({
+                        "image": {
+                            "type": "external",
+                            "external": {"url": file_url}
+                        }
+                    }
+                    embed_blocks.append(block)
+
+                # 音声ファイル
+                elif file_name.lower().endswith((".mp3", ".wav", ".ogg", ".m4a")):
+                    block = {
                         "object": "block",
                         "type": "audio",
-                        "audio": {"type": "file", "file": {"url": notion_file_url}}
-                    })
-                elif external_url and file_name.lower().endswith((".mp3", ".wav", ".ogg", ".m4a")):
-                    embed_blocks.append({
-                        "object": "block",
-                        "type": "audio",
-                        "audio": {"type": "external", "external": {"url": external_url}}
-                    })
+                        "audio": {
+                            "type": "external",
+                            "external": {"url": file_url}
+                        }
+                    }
+                    embed_blocks.append(block)
+
     if file_objs:
         properties["ファイル"] = {"files": file_objs}
+
     payload = {
         "parent": {"database_id": DATA_MANAGE_TABLEKEY},
         "properties": properties,
     }
+
     if embed_blocks:
         # Notion APIの仕様上、childrenは最大100件まで
         payload["children"] = embed_blocks[:100]
+
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 200:
         print('Page added to DATA_MANAGE_TABLEKEY')
