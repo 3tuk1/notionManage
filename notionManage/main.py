@@ -53,9 +53,25 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                     "start": created_time
                 }
             }
-        elif key in page_data:
+        elif key in page_data and key not in ["ファイル"]:
             properties[key] = page_data[key]
-    # アップロード列の処理
+    # アップロード列のファイルをファイル列にコピー
+    file_objs = []
+    if 'アップロード' in page_data:
+        upload_prop = page_data['アップロード']
+        if 'files' in upload_prop and upload_prop['files']:
+            for file_info in upload_prop['files']:
+                file_url = file_info.get('file', {}).get('url') or file_info.get('external', {}).get('url')
+                file_name = file_info.get('name', 'ファイル')
+                if file_url:
+                    file_objs.append({
+                        "type": "external",
+                        "name": file_name,
+                        "external": {"url": file_url}
+                    })
+    if file_objs:
+        properties["ファイル"] = {"files": file_objs}
+    # ページ本文の埋め込みブロックを作成
     upload_files = []
     if 'アップロード' in page_data:
         upload_prop = page_data['アップロード']
@@ -73,7 +89,6 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                         embed_type = None
                     if embed_type:
                         upload_files.append({'type': embed_type, 'url': file_url})
-    # ページ本文の埋め込みブロックを作成
     children = []
     for f in upload_files:
         if f['type'] == 'movie':
