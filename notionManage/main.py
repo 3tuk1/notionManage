@@ -1,5 +1,9 @@
 import os
 import requests
+import re
+import uuid
+from urllib.parse import urlparse, parse_qs
+import tempfile
 
 NOTION_API_KEY = os.environ.get('NOTION_API_KEY')
 DATA_MANAGE_TABLEKEY = os.environ.get('DATA_MANAGE_TABLEKEY')
@@ -33,6 +37,139 @@ def get_table_property_types(database_id):
         data = response.json()
         return {k: v.get('type') for k, v in data.get('properties', {}).items()}
     return {}
+
+def download_and_upload_file(file_url, file_name):
+    """NotionのファイルURLからファイルをダウンロードし、再アップロードして永続リンクを取得"""
+    try:
+        # ファイルをダウンロード
+        print(f"ファイルのダウンロード中: {file_name}")
+        file_response = requests.get(file_url, stream=True)
+        if file_response.status_code != 200:
+            print(f"ファイルのダウンロードに失敗: {file_response.status_code}")
+            return None
+
+        # Notionにファイルをアップロード（循環参照を避けるため外部URLとして保存）
+        # 実運用ではこの部分を別のストレージサービス（S3、GCSなど）に置き換えることで永続化
+        # このデモでは一時的なサードパーティアップロードサービスを使用（運用時は変更推奨）
+        temp_file_url = f"https://example.com/storage/{uuid.uuid4()}/{file_name}"
+        print(f"永続ファイルURLに変換: {temp_file_url}")
+
+        # 実際の実装では、以下のようなコードでファイルを永続的なストレージに保存する
+        # upload_to_storage(file_response.content, file_name)
+
+        return temp_file_url
+    except Exception as e:
+        print(f"ファイル処理中にエラーが発生: {e}")
+        return None
+
+def download_and_upload_file_to_notion(file_url, file_name):
+    """
+    NotionのファイルURLからファイルをダウンロードし、再度Notionにアップロードして永続リンクを取得
+    """
+    try:
+        # ファイルをダウンロード
+        print(f"ファイルのダウンロード中: {file_name}")
+        file_response = requests.get(file_url, stream=True)
+        if file_response.status_code != 200:
+            print(f"ファイルのダウンロードに失敗: {file_response.status_code}")
+            return None
+
+        # 一時ファイルとして保存
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file_name)[1]) as temp_file:
+            temp_path = temp_file.name
+            for chunk in file_response.iter_content(chunk_size=8192):
+                if chunk:
+                    temp_file.write(chunk)
+
+        print(f"一時ファイルに保存: {temp_path}")
+
+        # NotionにファイルをアップロードするAPI
+        upload_url = "https://api.notion.com/v1/files"
+
+        # ファイルアップロード用のヘッダー（Content-Typeを変更）
+        upload_headers = headers.copy()
+        upload_headers["Content-Type"] = "multipart/form-data"
+
+        # ファイルをアップロード
+        with open(temp_path, 'rb') as f:
+            files = {
+                'file': (file_name, f, 'application/octet-stream'),
+                'type': (None, 'file'),
+                'name': (None, file_name)
+            }
+            print(f"Notionにファイルをアップロード中: {file_name}")
+
+            # Notionへのファイルアップロードリクエスト（S3へのプリサインドURL取得）
+            presigned_response = requests.post(
+                "https://api.notion.com/v1/files",
+                headers=upload_headers,
+                files=files
+            )
+
+            if presigned_response.status_code != 200:
+                print(f"ファイルアップロードURLの取得に失敗: {presigned_response.text}")
+                os.unlink(temp_path)
+                return None
+
+            presigned_data = presigned_response.json()
+            presigned_url = presigned_data.get('url')
+
+            if not presigned_url:
+                print("プリサインドURLが見つかりません")
+                os.unlink(temp_path)
+                return None
+
+            # S3にファイルをアップロード
+            with open(temp_path, 'rb') as f:
+                s3_upload = requests.put(
+                    presigned_url,
+                    data=f,
+                    headers={"Content-Type": "application/octet-stream"}
+                )
+
+                if s3_upload.status_code not in [200, 201]:
+                    print(f"S3へのファイルアップロードに失敗: {s3_upload.status_code}")
+                    os.unlink(temp_path)
+                    return None
+
+        # 一時ファイル削除
+        os.unlink(temp_path)
+
+        # 永続的なNotionファイルURL
+        permanent_file_url = presigned_data.get('url')
+        print(f"永続ファイルURLを取得: {permanent_file_url}")
+
+        return permanent_file_url
+    except Exception as e:
+        print(f"ファイル処理中にエラーが発生: {e}")
+        # 一時ファイルがあれば削除
+        try:
+            if 'temp_path' in locals():
+                os.unlink(temp_path)
+        except:
+            pass
+        return None
+
+def is_temporary_notion_url(url):
+    """NotionのS3一時URLかどうか判定"""
+    if 'prod-files-secure.s3' in url and ('X-Amz-Expires' in url or 'expiry_time' in url):
+        return True
+    return False
+
+def extract_file_id_from_url(url):
+    """NotionのURLからファイルIDを抽出"""
+    try:
+        # URLをパースしてクエリパラメータを取得
+        parsed_url = urlparse(url)
+        path_parts = parsed_url.path.split('/')
+
+        # パスの最後の部分がファイル名の場合が多い
+        if len(path_parts) > 0:
+            file_name = path_parts[-1]
+            return file_name
+        return None
+    except:
+        return None
 
 def add_to_data_manage(page_data, page_id=None, created_time=None):
     url = f"{NOTION_API_URL}pages"
@@ -106,25 +243,24 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                     print(f"処理中のファイル: {file_name}, URL: {file_url}, タイプ: {file_type}")
 
                     # NotionのS3 URLかどうかを判定（一時的なURLの場合）
-                    is_temp_url = "prod-files-secure.s3" in file_url and ("X-Amz-Expires" in file_url or expiry_time)
+                    is_temp_url = is_temporary_notion_url(file_url)
 
-                    # ファイル列用のオブジェクト作成
-                    if file_type == "file":
-                        file_obj = {
-                            "name": file_name,
-                            "type": "file",
-                            "file": {"url": file_url}
-                        }
-                        # 有効期限情報があれば追加
-                        if expiry_time:
-                            file_obj["file"]["expiry_time"] = expiry_time
-                        file_objs.append(file_obj)
-                    else:  # external
-                        file_objs.append({
-                            "name": file_name,
-                            "type": "external",
-                            "external": {"url": file_url}
-                        })
+                    # 一時URLの場合、Notionに再アップロードして永続的なURLを取得
+                    if is_temp_url and file_type == "file":
+                        print(f"一時的なURLを検出: {file_name} - 再アップロード処理を開始")
+                        permanent_url = download_and_upload_file_to_notion(file_url, file_name)
+                        if permanent_url:
+                            file_url = permanent_url
+                            file_type = "external"
+                            print(f"永続URLに置換完了: {file_name}")
+
+                    # ファイル列用のオブジェクト作成 - Notionの仕様に合わせて、常にexternalとして扱う
+                    file_obj = {
+                        "name": file_name,
+                        "type": "external",
+                        "external": {"url": file_url}
+                    }
+                    file_objs.append(file_obj)
 
                     # 拡張子でファイルタイプを判定
                     file_lower = file_name.lower()
@@ -132,7 +268,6 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                     # 画像ファイル
                     if any(file_lower.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]):
                         # 画像ブロックの作成 - external URLのみ対応
-                        # 注意: Notionは一時的なURLしか受け付けないので、常にexternalとして扱う
                         block = {
                             "object": "block",
                             "type": "image",
