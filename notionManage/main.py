@@ -71,26 +71,47 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
 
     if 'アップロード' in page_data:
         upload_prop = page_data['アップロード']
-        if 'files' in upload_prop and upload_prop['files']:
-            for file_info in upload_prop['files']:
-                file_name = file_info.get('name', 'ファイル')
-                notion_file_url = file_info.get('file', {}).get('url')
-                external_url = file_info.get('external', {}).get('url')
-                file_url = notion_file_url or external_url
+        if 'files' in upload_prop:
+            # 直接オブジェクトを取得
+            files_array = upload_prop['files']
+            # アップロードのプロパティ全体を詳細に出力（デバッグ用）
+            print(f"アップロードのプロパティ: {upload_prop}")
 
-                # ファイル列用のオブジェクト作成
-                if file_url:
-                    if notion_file_url:
+            if isinstance(files_array, list) and files_array:
+                for file_info in files_array:
+                    file_name = file_info.get('name', 'ファイル')
+
+                    # Notion内部ファイルとExternal URLの両方に対応
+                    file_url = None
+                    file_type = None
+
+                    # 内部ファイルチェック
+                    if 'file' in file_info and isinstance(file_info['file'], dict) and 'url' in file_info['file']:
+                        file_url = file_info['file']['url']
+                        file_type = "file"
+                    # 外部URLチェック
+                    elif 'external' in file_info and isinstance(file_info['external'], dict) and 'url' in file_info['external']:
+                        file_url = file_info['external']['url']
+                        file_type = "external"
+
+                    if not file_url:
+                        print(f"ファイルURLが見つかりません: {file_info}")
+                        continue
+
+                    print(f"処理中のファイル: {file_name}, URL: {file_url}, タイプ: {file_type}")
+
+                    # ファイル列用のオブジェクト作成
+                    if file_type == "file":
                         file_objs.append({
+                            "name": file_name,
                             "type": "file",
-                            "name": file_name,
-                            "file": {"url": notion_file_url}
+                            "file": {"url": file_url}
                         })
-                    else:  # external_url
+                    else:  # external
                         file_objs.append({
-                            "type": "external",
                             "name": file_name,
-                            "external": {"url": external_url}
+                            "type": "external",
+                            "external": {"url": file_url}
                         })
 
                     # 拡張子でファイルタイプを判定
@@ -98,24 +119,22 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
 
                     # 画像ファイル
                     if any(file_lower.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]):
-                        # 画像ブロックの作成
-                        block_type = "external" if external_url else "file"
-                        url_obj = {"url": file_url}
-
+                        # 画像ブロックの作成 - external URLのみ対応
+                        # 注意: Notionは一時的なURLしか受け付けないので、常にexternalとして扱う
                         block = {
                             "object": "block",
                             "type": "image",
                             "image": {
-                                "type": block_type,
-                                block_type: url_obj
+                                "type": "external",
+                                "external": {"url": file_url}
                             }
                         }
+                        print(f"画像ブロック作成: {block}")
                         embed_blocks.append(block)
 
                     # 動画ファイル
                     elif any(file_lower.endswith(ext) for ext in [".mp4", ".mov", ".avi", ".webm", ".mkv", ".flv"]):
                         # 動画ブロックの作成
-                        # Notionでは埋め込みビデオにnotionファイルを使用できないため、外部URLとして扱う
                         block = {
                             "object": "block",
                             "type": "video",
@@ -124,6 +143,7 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                                 "external": {"url": file_url}
                             }
                         }
+                        print(f"動画ブロック作成: {block}")
                         embed_blocks.append(block)
 
                     # 音声ファイル
@@ -137,6 +157,7 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                                 "external": {"url": file_url}
                             }
                         }
+                        print(f"音声ブロック作成: {block}")
                         embed_blocks.append(block)
 
                     # その他のファイル（埋め込み不可）はファイルブロックとして追加
@@ -149,9 +170,12 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                                 "external": {"url": file_url}
                             }
                         }
+                        print(f"ファイルブロック作成: {block}")
                         embed_blocks.append(block)
 
+    # ファイル列の設定
     if file_objs:
+        print(f"追加するファイルオブジェクト: {file_objs}")
         properties["ファイル"] = {"files": file_objs}
 
     payload = {
@@ -159,10 +183,12 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
         "properties": properties,
     }
 
+    # ブロック追加
     if embed_blocks:
         # Notion APIの仕様上、childrenは最大100件まで
         payload["children"] = embed_blocks[:100]
 
+    print(f"送信するペイロード: {payload}")
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 200:
         print('Page added to DATA_MANAGE_TABLEKEY')
@@ -170,6 +196,8 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
     else:
         print(f'Failed to add page: HTTP {response.status_code}')
         print(f'Response: {response.text}')
+        # 問題のあるペイロードを表示
+        print(f'Problem payload: {payload}')
         return None
 
 def get_table_columns(database_id):
