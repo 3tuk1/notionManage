@@ -38,19 +38,30 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
     url = f"{NOTION_API_URL}pages"
     data_manage_types = get_table_property_types(DATA_MANAGE_TABLEKEY)
     properties = {}
+
+    # DATA_MANAGE_TABLEKEYのすべての列に対応
     for key, typ in data_manage_types.items():
+        # タイトル列（名前）の処理
         if key == "名前" and page_id:
             properties["名前"] = {
                 "title": [
                     {"text": {"content": page_id}}
                 ]
             }
+        # 提出日時の処理
         elif key == "提出日時" and created_time:
             properties["提出日時"] = {
                 "date": {
                     "start": created_time
                 }
             }
+        # プロジェクト管理テーブル (relation) の処理
+        elif key == "プロジェクト管理テーブル" and "プロジェクト管理テーブル" in page_data:
+            properties[key] = page_data["プロジェクト管理テーブル"]
+        # カテゴリ (relation) の処理 - "アップロード予定のファイル"に相当
+        elif key == "カテゴリ" and "アップロード予定のファイル" in page_data:
+            properties[key] = page_data["アップロード予定のファイル"]
+        # その他の列の情報をコピー
         elif key in page_data and key not in ["ファイル"]:
             properties[key] = page_data[key]
 
@@ -135,8 +146,10 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 200:
         print('Page added to DATA_MANAGE_TABLEKEY')
+        return response.json()
     else:
         print('Failed to add page:', response.text)
+        return None
 
 def get_table_columns(database_id):
     """
