@@ -111,7 +111,21 @@ def move_uploads_to_data_manage():
             else:
                 print(f"Failed to archive page {page_id}: {del_response.text}")
 
+def print_table_columns(database_id, label=None):
+    url = f"{NOTION_API_URL}databases/{database_id}"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        print(f"--- {label or database_id} columns ---")
+        for k, v in data.get('properties', {}).items():
+            print(f"{k}: {v.get('type')} -> {v}")
+        print("-----------------------------")
+    else:
+        print(f"Failed to fetch columns for {label or database_id}: {response.text}")
+
 def main():
+    print_table_columns(UPLOADFORM_TABLEKEY, label="UPLOADFORM_TABLEKEY")
+    print_table_columns(DATA_MANAGE_TABLEKEY, label="DATA_MANAGE_TABLEKEY")
     move_uploads_to_data_manage()
 
 if __name__ == '__main__':
