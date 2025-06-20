@@ -55,6 +55,7 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
             properties[key] = page_data[key]
     # アップロード列のファイルをファイル列にコピー（Notion hosted fileはtype=file, 外部はtype=external）
     file_objs = []
+    embed_blocks = []
     if 'アップロード' in page_data:
         upload_prop = page_data['アップロード']
         if 'files' in upload_prop and upload_prop['files']:
@@ -62,6 +63,7 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                 file_name = file_info.get('name', 'ファイル')
                 notion_file_url = file_info.get('file', {}).get('url')
                 external_url = file_info.get('external', {}).get('url')
+                # ファイル列用
                 if notion_file_url:
                     file_objs.append({
                         "type": "file",
@@ -74,40 +76,54 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                         "name": file_name,
                         "external": {"url": external_url}
                     })
+                # 埋め込みブロック用
+                # 動画
+                if notion_file_url and file_name.lower().endswith((".mp4", ".mov", ".avi", ".webm")):
+                    embed_blocks.append({
+                        "object": "block",
+                        "type": "video",
+                        "video": {"type": "file", "file": {"url": notion_file_url}}
+                    })
+                elif external_url and file_name.lower().endswith((".mp4", ".mov", ".avi", ".webm")):
+                    embed_blocks.append({
+                        "object": "block",
+                        "type": "video",
+                        "video": {"type": "external", "external": {"url": external_url}}
+                    })
+                # 画像
+                if notion_file_url and file_name.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp")):
+                    embed_blocks.append({
+                        "object": "block",
+                        "type": "image",
+                        "image": {"type": "file", "file": {"url": notion_file_url}}
+                    })
+                elif external_url and file_name.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp")):
+                    embed_blocks.append({
+                        "object": "block",
+                        "type": "image",
+                        "image": {"type": "external", "external": {"url": external_url}}
+                    })
+                # 音声
+                if notion_file_url and file_name.lower().endswith((".mp3", ".wav", ".ogg", ".m4a")):
+                    embed_blocks.append({
+                        "object": "block",
+                        "type": "audio",
+                        "audio": {"type": "file", "file": {"url": notion_file_url}}
+                    })
+                elif external_url and file_name.lower().endswith((".mp3", ".wav", ".ogg", ".m4a")):
+                    embed_blocks.append({
+                        "object": "block",
+                        "type": "audio",
+                        "audio": {"type": "external", "external": {"url": external_url}}
+                    })
     if file_objs:
         properties["ファイル"] = {"files": file_objs}
-    # ページ本文の埋め込みブロックを作成
-    upload_files = []
-    if 'アップロード' in page_data:
-        upload_prop = page_data['アップロード']
-        if 'files' in upload_prop and upload_prop['files']:
-            for file_info in upload_prop['files']:
-                file_url = file_info.get('file', {}).get('url') or file_info.get('external', {}).get('url')
-                if file_url:
-                    if file_url.lower().endswith(('.mp4', '.mov', '.avi', '.webm')):
-                        embed_type = 'movie'
-                    elif file_url.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')):
-                        embed_type = 'photo'
-                    elif file_url.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a')):
-                        embed_type = 'sound'
-                    else:
-                        embed_type = None
-                    if embed_type:
-                        upload_files.append({'type': embed_type, 'url': file_url})
-    children = []
-    for f in upload_files:
-        if f['type'] == 'movie':
-            children.append({"object": "block", "type": "video", "video": {"type": "external", "external": {"url": f['url']}}})
-        elif f['type'] == 'photo':
-            children.append({"object": "block", "type": "image", "image": {"type": "external", "external": {"url": f['url']}}})
-        elif f['type'] == 'sound':
-            children.append({"object": "block", "type": "audio", "audio": {"type": "external", "external": {"url": f['url']}}})
     payload = {
         "parent": {"database_id": DATA_MANAGE_TABLEKEY},
         "properties": properties,
     }
-    if children:
-        payload["children"] = children
+    if embed_blocks:
+        payload["children"] = embed_blocks
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 200:
         print('Page added to DATA_MANAGE_TABLEKEY')
