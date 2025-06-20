@@ -254,15 +254,25 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                             file_type = "external"
                             print(f"永続URLに置換完了: {file_name}")
 
-                    # ファイル列用のオブジェクト作成 - Notionの仕様に合わせて、常にexternalとして扱う
-                    file_obj = {
-                        "name": file_name,
-                        "type": "external",
-                        "external": {"url": file_url}
-                    }
+                    # ファイル列用のオブジェクト作成
+                    # 重要: Notionホストのファイルは'file'タイプで、外部URLは'external'タイプで扱う
+                    if file_type == "file":
+                        file_obj = {
+                            "name": file_name,
+                            "type": "file",
+                            "file": {"url": file_url}
+                        }
+                        if expiry_time:
+                            file_obj["file"]["expiry_time"] = expiry_time
+                    else:  # external
+                        file_obj = {
+                            "name": file_name,
+                            "type": "external",
+                            "external": {"url": file_url}
+                        }
                     file_objs.append(file_obj)
 
-                    # 拡張子でファイルタイプを判定
+                    # 拡張子でファイルタイプを判定 - ページ埋め込み用
                     file_lower = file_name.lower()
 
                     # 画像ファイル
