@@ -36,10 +36,8 @@ def get_table_property_types(database_id):
 
 def add_to_data_manage(page_data, page_id=None, created_time=None):
     url = f"{NOTION_API_URL}pages"
-    # DATA_MANAGEテーブルのプロパティ一覧を取得
     data_manage_types = get_table_property_types(DATA_MANAGE_TABLEKEY)
     properties = {}
-    # 必要なプロパティのみコピー
     for key, typ in data_manage_types.items():
         if key == "名前" and page_id:
             properties["名前"] = {
@@ -61,21 +59,21 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
         upload_prop = page_data['アップロード']
         if 'files' in upload_prop and upload_prop['files']:
             for file_info in upload_prop['files']:
-                file_url = file_info.get('file', {}).get('url') or file_info.get('external', {}).get('url')
                 file_name = file_info.get('name', 'ファイル')
-                if file_url:
-                    if file_url.startswith('https://s3.') or file_url.startswith('https://www.notion.so/'):  # Notion hosted
-                        file_objs.append({
-                            "type": "file",
-                            "name": file_name,
-                            "file": {"url": file_url}
-                        })
-                    else:
-                        file_objs.append({
-                            "type": "external",
-                            "name": file_name,
-                            "external": {"url": file_url}
-                        })
+                notion_file_url = file_info.get('file', {}).get('url')
+                external_url = file_info.get('external', {}).get('url')
+                if notion_file_url:
+                    file_objs.append({
+                        "type": "file",
+                        "name": file_name,
+                        "file": {"url": notion_file_url}
+                    })
+                elif external_url:
+                    file_objs.append({
+                        "type": "external",
+                        "name": file_name,
+                        "external": {"url": external_url}
+                    })
     if file_objs:
         properties["ファイル"] = {"files": file_objs}
     # ページ本文の埋め込みブロックを作成
@@ -131,7 +129,7 @@ def get_table_columns(database_id):
 
 def move_uploads_to_data_manage():
     """
-    UPLOADFORM_TABLEKEYの全ページ内容をDATA_MANAGE_TABLEKEYに追加し、元ページを削除する
+    UPLOADFORM_TABLEKEYの全ページ内容をDATA_MANAGE_TABLEKEYに追加する（削除は行わない）
     """
     uploads = get_new_uploads()
     # まず全てのページをDATA_MANAGE_TABLEKEYに追加
@@ -140,16 +138,16 @@ def move_uploads_to_data_manage():
         page_id = upload.get('id')
         created_time = upload.get('created_time')
         add_to_data_manage(properties, page_id=page_id, created_time=created_time)
-    # その後、元ページを削除
-    for upload in uploads:
-        page_id = upload.get('id')
-        if page_id:
-            delete_url = f"{NOTION_API_URL}pages/{page_id}"
-            del_response = requests.patch(delete_url, headers=headers, json={"archived": True})
-            if del_response.status_code == 200:
-                print(f"Page {page_id} archived (deleted) from UPLOADFORM_TABLEKEY.")
-            else:
-                print(f"Failed to archive page {page_id}: {del_response.text}")
+    # 削除処理は一時的にオフ
+    # for upload in uploads:
+    #     page_id = upload.get('id')
+    #     if page_id:
+    #         delete_url = f"{NOTION_API_URL}pages/{page_id}"
+    #         del_response = requests.patch(delete_url, headers=headers, json={"archived": True})
+    #         if del_response.status_code == 200:
+    #             print(f"Page {page_id} archived (deleted) from UPLOADFORM_TABLEKEY.")
+    #         else:
+    #             print(f"Failed to archive page {page_id}: {del_response.text}")
 
 def print_table_columns(database_id, label=None):
     url = f"{NOTION_API_URL}databases/{database_id}"
