@@ -84,11 +84,16 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                     # Notion内部ファイルとExternal URLの両方に対応
                     file_url = None
                     file_type = None
+                    expiry_time = None
 
                     # 内部ファイルチェック
                     if 'file' in file_info and isinstance(file_info['file'], dict) and 'url' in file_info['file']:
                         file_url = file_info['file']['url']
                         file_type = "file"
+                        # 有効期限情報があれば取得
+                        if 'expiry_time' in file_info['file']:
+                            expiry_time = file_info['file']['expiry_time']
+                            print(f"ファイル有効期限: {expiry_time}")
                     # 外部URLチェック
                     elif 'external' in file_info and isinstance(file_info['external'], dict) and 'url' in file_info['external']:
                         file_url = file_info['external']['url']
@@ -100,13 +105,20 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
 
                     print(f"処理中のファイル: {file_name}, URL: {file_url}, タイプ: {file_type}")
 
+                    # NotionのS3 URLかどうかを判定（一時的なURLの場合）
+                    is_temp_url = "prod-files-secure.s3" in file_url and ("X-Amz-Expires" in file_url or expiry_time)
+
                     # ファイル列用のオブジェクト作成
                     if file_type == "file":
-                        file_objs.append({
+                        file_obj = {
                             "name": file_name,
                             "type": "file",
                             "file": {"url": file_url}
-                        })
+                        }
+                        # 有効期限情報があれば追加
+                        if expiry_time:
+                            file_obj["file"]["expiry_time"] = expiry_time
+                        file_objs.append(file_obj)
                     else:  # external
                         file_objs.append({
                             "name": file_name,
