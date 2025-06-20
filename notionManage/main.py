@@ -26,7 +26,7 @@ def get_new_uploads():
         print('Failed to fetch upload form data:', response.text)
         return []
 
-def add_to_data_manage(page_data, page_id=None):
+def add_to_data_manage(page_data, page_id=None, created_time=None):
     # DATA_MANAGE_TABLEKEYにページ追加（アップロード列の埋め込み対応）
     url = f"{NOTION_API_URL}pages"
     properties = dict(page_data)  # コピー
@@ -36,6 +36,13 @@ def add_to_data_manage(page_data, page_id=None):
             "title": [
                 {"text": {"content": page_id}}
             ]
+        }
+    # 提出日時（date型）を必ずセット
+    if created_time:
+        properties["提出日時"] = {
+            "date": {
+                "start": created_time
+            }
         }
     # アップロード列の処理
     upload_files = []
@@ -99,7 +106,8 @@ def move_uploads_to_data_manage():
     for upload in uploads:
         properties = upload.get('properties', {})
         page_id = upload.get('id')
-        add_to_data_manage(properties, page_id=page_id)
+        created_time = upload.get('created_time')
+        add_to_data_manage(properties, page_id=page_id, created_time=created_time)
     # その後、元ページを削除
     for upload in uploads:
         page_id = upload.get('id')
