@@ -55,7 +55,7 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
             }
         elif key in page_data and key not in ["ファイル"]:
             properties[key] = page_data[key]
-    # アップロード列のファイルをファイル列にコピー
+    # アップロード列のファイルをファイル列にコピー（Notion hosted fileはtype=file, 外部はtype=external）
     file_objs = []
     if 'アップロード' in page_data:
         upload_prop = page_data['アップロード']
@@ -64,11 +64,18 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                 file_url = file_info.get('file', {}).get('url') or file_info.get('external', {}).get('url')
                 file_name = file_info.get('name', 'ファイル')
                 if file_url:
-                    file_objs.append({
-                        "type": "external",
-                        "name": file_name,
-                        "external": {"url": file_url}
-                    })
+                    if file_url.startswith('https://s3.') or file_url.startswith('https://www.notion.so/'):  # Notion hosted
+                        file_objs.append({
+                            "type": "file",
+                            "name": file_name,
+                            "file": {"url": file_url}
+                        })
+                    else:
+                        file_objs.append({
+                            "type": "external",
+                            "name": file_name,
+                            "external": {"url": file_url}
+                        })
     if file_objs:
         properties["ファイル"] = {"files": file_objs}
     # ページ本文の埋め込みブロックを作成
