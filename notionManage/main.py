@@ -26,10 +26,17 @@ def get_new_uploads():
         print('Failed to fetch upload form data:', response.text)
         return []
 
-def add_to_data_manage(page_data):
+def add_to_data_manage(page_data, page_id=None):
     # DATA_MANAGE_TABLEKEYにページ追加（アップロード列の埋め込み対応）
     url = f"{NOTION_API_URL}pages"
     properties = dict(page_data)  # コピー
+    # ページ名をページIDにする
+    if page_id:
+        properties["名前"] = {
+            "title": [
+                {"text": {"content": page_id}}
+            ]
+        }
     # アップロード列の処理
     upload_files = []
     if 'アップロード' in properties:
@@ -58,7 +65,6 @@ def add_to_data_manage(page_data):
             children.append({"object": "block", "type": "image", "image": {"type": "external", "external": {"url": f['url']}}})
         elif f['type'] == 'sound':
             children.append({"object": "block", "type": "audio", "audio": {"type": "external", "external": {"url": f['url']}}})
-    # アップロード列は空にする（またはそのまま）
     payload = {
         "parent": {"database_id": DATA_MANAGE_TABLEKEY},
         "properties": properties,
@@ -92,7 +98,8 @@ def move_uploads_to_data_manage():
     # まず全てのページをDATA_MANAGE_TABLEKEYに追加
     for upload in uploads:
         properties = upload.get('properties', {})
-        add_to_data_manage(properties)
+        page_id = upload.get('id')
+        add_to_data_manage(properties, page_id=page_id)
     # その後、元ページを削除
     for upload in uploads:
         page_id = upload.get('id')
