@@ -1,6 +1,7 @@
 name: Notion Move Uploads
 
 on:
+  push:
   workflow_dispatch:
 
 jobs:
@@ -23,4 +24,3 @@ jobs:
           UPLOADFORM_TABLEKEY: ${{ secrets.UPLOADFORM_TABLEKEY }}
         run: |
           python notionManage/main.py
-

@@ -123,7 +123,8 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
         "properties": properties,
     }
     if embed_blocks:
-        payload["children"] = embed_blocks
+        # Notion APIの仕様上、childrenは最大100件まで
+        payload["children"] = embed_blocks[:100]
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 200:
         print('Page added to DATA_MANAGE_TABLEKEY')
