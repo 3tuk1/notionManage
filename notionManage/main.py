@@ -15,7 +15,8 @@ headers = {
 }
 
 def get_new_uploads():
-    # UPLOADFORM_TABLEKEYのテーブルからデータ取得（仮実装）
+    # UPLOADFORM_TABLEKEYのテーブルからデータ取得（デバッグ用出力追加）
+    print(f"UPLOADFORM_TABLEKEY: {UPLOADFORM_TABLEKEY}")
     url = f"{NOTION_API_URL}databases/{UPLOADFORM_TABLEKEY}/query"
     response = requests.post(url, headers=headers)
     if response.status_code == 200:
