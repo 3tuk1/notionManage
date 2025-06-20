@@ -26,33 +26,43 @@ def get_new_uploads():
         print('Failed to fetch upload form data:', response.text)
         return []
 
+def get_table_property_types(database_id):
+    url = f"{NOTION_API_URL}databases/{database_id}"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        return {k: v.get('type') for k, v in data.get('properties', {}).items()}
+    return {}
+
 def add_to_data_manage(page_data, page_id=None, created_time=None):
-    # DATA_MANAGE_TABLEKEYにページ追加（アップロード列の埋め込み対応）
     url = f"{NOTION_API_URL}pages"
-    properties = dict(page_data)  # コピー
-    # ページ名をページIDにする
-    if page_id:
-        properties["名前"] = {
-            "title": [
-                {"text": {"content": page_id}}
-            ]
-        }
-    # 提出日時（date型）を必ずセット
-    if created_time:
-        properties["提出日時"] = {
-            "date": {
-                "start": created_time
+    # DATA_MANAGEテーブルのプロパティ一覧を取得
+    data_manage_types = get_table_property_types(DATA_MANAGE_TABLEKEY)
+    properties = {}
+    # 必要なプロパティのみコピー
+    for key, typ in data_manage_types.items():
+        if key == "名前" and page_id:
+            properties["名前"] = {
+                "title": [
+                    {"text": {"content": page_id}}
+                ]
             }
-        }
+        elif key == "提出日時" and created_time:
+            properties["提出日時"] = {
+                "date": {
+                    "start": created_time
+                }
+            }
+        elif key in page_data:
+            properties[key] = page_data[key]
     # アップロード列の処理
     upload_files = []
-    if 'アップロード' in properties:
-        upload_prop = properties['アップロード']
+    if 'アップロード' in page_data:
+        upload_prop = page_data['アップロード']
         if 'files' in upload_prop and upload_prop['files']:
             for file_info in upload_prop['files']:
                 file_url = file_info.get('file', {}).get('url') or file_info.get('external', {}).get('url')
                 if file_url:
-                    # 拡張子で判定
                     if file_url.lower().endswith(('.mp4', '.mov', '.avi', '.webm')):
                         embed_type = 'movie'
                     elif file_url.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')):
