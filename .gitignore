@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# VSCode
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environments
+.env
+.venv/
+venv/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints
+
+# Logs
+*.log
+
+# Others
+*.sqlite3
+*.db
+*.bak
+*.swp
+
