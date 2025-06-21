@@ -748,10 +748,21 @@ class NotionFileViewer:
 
             for k, v in properties.items():
                 print(f"Processing property: {k}, Value: {v}")  # プロパティのログ出力
-                if k == upload_key:
-                    # GDriveリンクを生成して設定
-                    file_url = self.google_drive_client.upload_file(v.get("file"))  # ファイルをアップロードしてリンクを取得
-                    new_props[file_column_key] = {"url": file_url}
+                # ファイルプロパティ識別をIDで行う
+                if v.get('id') == upload_key:
+                    files_list = v.get("files", [])
+                    if files_list:
+                        file_info = files_list[0]
+                        file_name = file_info.get("name")
+                        temp_notion_url = file_info.get("file", {}).get("url")
+                        if temp_notion_url and file_name:
+                            try:
+                                print(f"'{file_name}' をGoogle Driveにアップロードしています...")
+                                _, drive_url = self.google_drive_client.upload_file_from_url(temp_notion_url, file_name)
+                                new_props[file_column_key] = {"url": drive_url}
+                                print(f"アップロード成功。Drive URL: {drive_url}")
+                            except Exception as e:
+                                print(f"ファイル '{file_name}' のアップロード中にエラーが発生しました: {e}")
                     continue
                 if k == "提出日時" and date_column_key in data_manage_keys:
                     # 提出日時を設定
