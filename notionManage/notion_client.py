@@ -187,10 +187,22 @@ class NotionClient:
         return response.json()
 
     # --- ★ここからが追加するメソッド★ ---
-    def create_page(self, parent_db_id: str, properties: dict):
+    def create_page(self, parent_db_id: str, properties: dict) -> Dict:
         """指定されたデータベースに新しいページを作成する"""
-        return self.notion.pages.create(
-            parent={"database_id": parent_db_id},
-            properties=properties
-        )
+        url = f"{self.base_url}/pages"
+        payload = {
+            "parent": {"database_id": parent_db_id},
+            "properties": properties
+        }
+        response = requests.post(url, json=payload, headers=self.headers)
+        response.raise_for_status()
+        return response.json()
+
+    def archive_page(self, page_id: str) -> Dict:
+        """ページをアーカイブする"""
+        url = f"{self.base_url}/pages/{page_id}"
+        payload = {"archived": True}
+        response = requests.patch(url, json=payload, headers=self.headers)
+        response.raise_for_status()
+        return response.json()
     # --- ★ここまで★ ---
