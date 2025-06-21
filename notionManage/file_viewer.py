@@ -779,7 +779,7 @@ class NotionFileViewer:
                     continue
 
                 # --- 「アップロード予定のファイル」を「カテゴリ」列にコピーする特別処理 (デバッグ版) ---
-                if k == "アップロード予定のファイル":
+                if k.strip() == "アップロード予定のファイル":  # ★★★ k を k.strip() に変更 ★★★
                     print("!!! 'アップロード予定のファイル' プロパティを検出しました !!!")
                     category_key = self.data_manage_tablekey.get("カテゴリ") or "カテゴリ"
                     print(f"    -> コピー先のキー名: '{category_key}'")
