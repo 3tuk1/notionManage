@@ -369,3 +369,43 @@ class GoogleDriveClient:
             return ""
 
         return f"https://drive.google.com/drive/folders/{folder_id}"
+
+    def upload_file(self, file_path: str, mime_type: Optional[str] = None) -> str:
+        """
+        ファイルをGoogle Driveにアップロードし、共有可能なリンクを返す
+
+        Args:
+            file_path: アップロードするファイルのパス
+            mime_type: ファイルのMIMEタイプ（省略可能）
+
+        Returns:
+            共有可能なファイルリンク
+        """
+        file_name = os.path.basename(file_path)
+        mime_type = mime_type or mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
+
+        # ファイルをアップロード
+        file_metadata = {
+            'name': file_name,
+            'parents': [self.folder_ids.get('other', 'root')],  # デフォルトで「その他」フォルダにアップロード
+        }
+        media = MediaIoBaseUpload(io.FileIO(file_path, 'rb'), mimetype=mime_type)
+        uploaded_file = self.service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id, webViewLink'
+        ).execute()
+
+        # ファイルを共有可能に設定
+        if self.share_with_email:
+            self.service.permissions().create(
+                fileId=uploaded_file['id'],
+                body={
+                    'type': 'user',
+                    'role': 'reader',
+                    'emailAddress': self.share_with_email
+                },
+                fields='id'
+            ).execute()
+
+        return uploaded_file['webViewLink']

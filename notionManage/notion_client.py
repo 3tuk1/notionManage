@@ -169,3 +169,19 @@ class NotionClient:
             if e.response is not None:
                 print(f"エラー詳細: {e.response.text}")
             return None
+
+    def retrieve_database(self, database_id: str) -> Dict:
+        """
+        データベースの詳細を取得
+
+        Args:
+            database_id: Notionデータベースのid
+
+        Returns:
+            データベースの詳細情報のJSON
+        """
+        url = f"{self.base_url}/databases/{database_id}"
+        response = requests.get(url, headers=self.headers)
+        if response.status_code != 200:
+            raise Exception(f"Failed to retrieve database: {response.status_code}, {response.text}")
+        return response.json()

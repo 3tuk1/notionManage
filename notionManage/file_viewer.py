@@ -1,9 +1,7 @@
-import base64
 import json
 import mimetypes
 import os
-from typing import Dict, List, Optional, Any, Union, Tuple
-from urllib.request import urlopen
+from typing import Dict, List, Optional, Tuple
 import requests
 
 from .notion_client import NotionClient
@@ -703,7 +701,7 @@ class NotionFileViewer:
             resp = requests.post(create_url, headers=self.client.headers, json=payload)
             if resp.status_code == 200 or resp.status_code == 201:
                 # 元ページ削除
-                delete_url = f"https://api.notion.com/v1/pages/{page_id}"
+                delete_url = f"https://api.notion.com/v1/pages/{page.get('id')}"
                 requests.delete(delete_url, headers=self.client.headers)
                 moved_count += 1
             else:
@@ -745,11 +743,16 @@ class NotionFileViewer:
                 new_props["名前"] = {"title": [{"type": "text", "text": {"content": page_id}}]}
             for k, v in properties.items():
                 if k == upload_key:
+                    # GDriveリンクを生成して設定
+                    gdrive_client = self.google_drive_client  # self.google_drive_client を使用
+                    file_url = gdrive_client.upload_file(v.get("file"))  # ファイルをアップロードしてリンクを取得
+                    new_props[file_column_key] = {"url": file_url}
                     continue
                 if k == "提出日時":
                     continue
                 if k not in data_manage_keys:
                     continue  # コピー先にないプロパティはスキップ
+
                 prop_type = v.get("type")
                 if prop_type in ("created_time", "last_edited_time"):
                     continue
@@ -800,36 +803,19 @@ class NotionFileViewer:
                     if rel_val:
                         new_props[k] = {"relation": rel_val}
                 # 他の型も必要に応じて追加
-            # ファイル列のGDriveリンクを取得
-            file_links = []
-            upload_files = properties.get(upload_key, {})
-            files = upload_files.get("files", [])
-            for file_obj in files:
-                file_url = self.client.get_file_url(file_obj)
-                if file_url:
-                    file_name = file_obj.get("name", "Unnamed")
-                    file_type = self._guess_file_type(file_name, file_url)
-                    gdrive_data = self._upload_to_drive({"url": file_url, "name": file_name, "type": file_type})
-                    gdrive_url = gdrive_data.get("url")
-                    if gdrive_url:
-                        file_links.append({"type": "external", "name": file_name, "url": gdrive_url})
-            if file_links and file_column_key in data_manage_keys:
-                new_props[file_column_key] = {
-                    "type": "files",
-                    "files": file_links
-                }
-            if not new_props:
-                continue
+            # コピー先データベースに新しいプロパティを追加
+            # update_page メソッドの未解決エラーを修正
+            # update_page メソッドが存在しないため、Notion API のページ作成エンドポイントを使用
             create_url = f"https://api.notion.com/v1/pages"
             payload = {
                 "parent": {"database_id": data_manage_db_id},
                 "properties": new_props
             }
-            resp = requests.post(create_url, headers=self.client.headers, json=payload)
-            if resp.status_code == 200 or resp.status_code == 201:
-                copied_count += 1
-            else:
-                print(f"データコピー失敗: {resp.text}")
+            response = requests.post(create_url, headers=self.client.headers, json=payload)
+            if response.status_code not in (200, 201):
+                raise Exception(f"Failed to create page: {response.status_code}, {response.text}")
+
+            copied_count += 1
         return copied_count
 def is_previewable_url(url: str) -> str:
     """
@@ -863,4 +849,4 @@ def is_previewable_url(url: str) -> str:
     # 音声拡張子
     if re.search(r"\\.(mp3|wav|ogg|m4a)(\\?|$)", url, re.IGNORECASE):
         return 'embed'
-    return None
+    return ""
