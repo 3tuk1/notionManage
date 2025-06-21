@@ -349,8 +349,11 @@ class NotionFileViewer:
         file_url = file_data.get("url", "")
         file_name = file_data.get("name", "Unnamed")
 
+        print(f"ファイル '{file_name}' のブロック作成 (タイプ: {file_type})")
+
         # ファイル種類によって異なるブロックを作成
         if "image" in file_type:
+            print(f"画像ファイルとして処理: {file_url}")
             # 画像ブロック
             image_block = {
                 "object": "block",
@@ -359,75 +362,12 @@ class NotionFileViewer:
                     "type": "external",
                     "external": {
                         "url": file_url
-                    },
-                    "caption": [{
-                        "type": "text",
-                        "text": {
-                            "content": file_name
-                        }
-                    }]
-                }
-            }
-            blocks.append(image_block)
-        elif "video" in file_type:
-            # 動画ブロック
-            video_block = {
-                "object": "block",
-                "type": "video",
-                "video": {
-                    "type": "external",
-                    "external": {
-                        "url": file_url
-                    },
-                    "caption": [{
-                        "type": "text",
-                        "text": {
-                            "content": file_name
-                        }
-                    }]
-                }
-            }
-            blocks.append(video_block)
-        elif "audio" in file_type:
-            # 音声ファイルはEmbedブロックとして追加
-            embed_block = {
-                "object": "block",
-                "type": "embed",
-                "embed": {
-                    "url": file_url
-                }
-            }
-            blocks.append(embed_block)
-
-            # 音声ファイルの場合はファイル名を別のブロックで表示
-            caption_block = {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {
-                            "content": f"ファイル名: {file_name}"
-                        }
-                    }]
-                }
-            }
-            blocks.append(caption_block)
-        else:
-            # その他のファイルはファイルブロックとして追加
-            file_block = {
-                "object": "block",
-                "type": "file",
-                "file": {
-                    "type": "external",
-                    "external": {
-                        "url": file_url
                     }
                 }
             }
-            blocks.append(file_block)
+            blocks.append(image_block)
 
-            # ファイル名を表示するパラグラフブロック
+            # キャプションは別のパラグラフブロックで表示
             caption_block = {
                 "object": "block",
                 "type": "paragraph",
@@ -435,12 +375,125 @@ class NotionFileViewer:
                     "rich_text": [{
                         "type": "text",
                         "text": {
-                            "content": f"ファイル名: {file_name}"
+                            "content": f"画像: {file_name}"
                         }
                     }]
                 }
             }
             blocks.append(caption_block)
+
+        elif "video" in file_type:
+            print(f"動画ファイルとして処理: {file_url}")
+
+            # 一般的な動画形式の場合はパラグラフにリンクを埋め込み
+            if file_url.endswith(('.mp4', '.mov', '.webm')):
+                # 動画へのリンクを含むパラグラフ
+                video_link_block = {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {
+                                "content": "動画を見る（クリックして開く）",
+                                "link": {"url": file_url}
+                            }
+                        }]
+                    }
+                }
+                blocks.append(video_link_block)
+            else:
+                # 一般的な埋め込みブロック
+                embed_block = {
+                    "object": "block",
+                    "type": "embed",
+                    "embed": {
+                        "url": file_url
+                    }
+                }
+                blocks.append(embed_block)
+
+            # 動画のタイトルを表示
+            title_block = {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {
+                            "content": f"動画: {file_name}"
+                        }
+                    }]
+                }
+            }
+            blocks.append(title_block)
+
+        elif "audio" in file_type:
+            print(f"音声ファイルとして処理: {file_url}")
+
+            # 音声ファイルへのリンクを含むパラグラフ
+            audio_link_block = {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {
+                            "content": "音声ファイルを聴く（クリックして開く）",
+                            "link": {"url": file_url}
+                        }
+                    }]
+                }
+            }
+            blocks.append(audio_link_block)
+
+            # 音声ファイル名を表示
+            caption_block = {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {
+                            "content": f"音声: {file_name}"
+                        }
+                    }]
+                }
+            }
+            blocks.append(caption_block)
+
+        else:
+            print(f"一般ファイルとして処理: {file_url}")
+            # その他のファイルはリンクブロックとして追加
+            link_block = {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {
+                            "content": file_name,
+                            "link": {"url": file_url}
+                        }
+                    }]
+                }
+            }
+            blocks.append(link_block)
+
+            # ファイルタイプの説明を追加
+            type_block = {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {
+                            "content": f"ファイルタイプ: {file_type}"
+                        }
+                    }]
+                }
+            }
+            blocks.append(type_block)
 
         return blocks
 
