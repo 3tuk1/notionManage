@@ -778,6 +778,15 @@ class NotionFileViewer:
                         new_props[date_column_key] = {'date': {'start': ct}}
                     continue
 
+                # --- 「アップロード予定のファイル」を「カテゴリ」列にコピーする特別処理 ---
+                if k == "アップロード予定のファイル":
+                    category_key = self.data_manage_tablekey.get("カテゴリ") or "カテゴリ"
+                    if prop_type == "relation":
+                        relation_value = v.get("relation")
+                        if category_key in data_manage_keys and relation_value:
+                            new_props[category_key] = {"relation": relation_value}
+                    continue
+
                 # 4. コピー不要なプロパティをスキップ
                 if prop_type in ('title', 'created_by', 'last_edited_by', 'last_edited_time'):
                     continue
