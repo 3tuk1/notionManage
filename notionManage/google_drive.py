@@ -2,6 +2,7 @@ import os
 import json
 import io
 import base64
+import mimetypes
 from typing import Dict, List, Optional, Any, Tuple
 from urllib.request import urlopen
 
@@ -12,6 +13,15 @@ from googleapiclient.http import MediaIoBaseUpload
 
 class GoogleDriveClient:
     """Google Drive APIクライアント"""
+
+    # フォルダ構造の定義
+    ROOT_FOLDER_NAME = "Notion"
+    FOLDER_TYPES = {
+        "image": "画像",
+        "video": "動画",
+        "audio": "音声",
+        "other": "その他"
+    }
 
     def __init__(self, service_account_key: str = None):
         """
@@ -50,9 +60,136 @@ class GoogleDriveClient:
             # Drive APIクライアントを作成
             self.service = build('drive', 'v3', credentials=self.credentials)
 
+            # キャッシュしたフォルダID
+            self.folder_ids = {}
+
+            # フォルダ構造を初期化
+            self._init_folder_structure()
+
             print("Google Drive APIクライアントの初期化に成功しました")
         except Exception as e:
             raise ValueError(f"Google Drive APIクライアントの初期化に失敗しました: {e}")
+
+    def _find_folder(self, folder_name: str, parent_id: Optional[str] = None) -> Optional[str]:
+        """
+        特定の名前のフォルダを検索
+
+        Args:
+            folder_name: フォルダ名
+            parent_id: 親フォルダのID（指定なしの場合はルート）
+
+        Returns:
+            フォルダID。見つからなければNone
+        """
+        query = f"name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        if parent_id:
+            query += f" and '{parent_id}' in parents"
+
+        results = self.service.files().list(
+            q=query,
+            spaces='drive',
+            fields='files(id, name)'
+        ).execute()
+
+        items = results.get('files', [])
+
+        if items:
+            return items[0]['id']
+        return None
+
+    def _create_folder(self, folder_name: str, parent_id: Optional[str] = None) -> str:
+        """
+        フォルダを作成
+
+        Args:
+            folder_name: フォルダ名
+            parent_id: 親フォルダのID（指定なしの場合はルート）
+
+        Returns:
+            作成されたフォルダのID
+        """
+        file_metadata = {
+            'name': folder_name,
+            'mimeType': 'application/vnd.google-apps.folder'
+        }
+
+        if parent_id:
+            file_metadata['parents'] = [parent_id]
+
+        folder = self.service.files().create(
+            body=file_metadata,
+            fields='id'
+        ).execute()
+
+        # 作成したフォルダを共有設定
+        permission = {
+            'type': 'anyone',
+            'role': 'reader'
+        }
+
+        self.service.permissions().create(
+            fileId=folder['id'],
+            body=permission
+        ).execute()
+
+        print(f"フォルダ '{folder_name}' を作成しました（ID: {folder['id']}）")
+        return folder['id']
+
+    def _get_or_create_folder(self, folder_name: str, parent_id: Optional[str] = None) -> str:
+        """
+        フォルダを検索し、なければ作成
+
+        Args:
+            folder_name: フォルダ名
+            parent_id: 親フォルダのID（指定なしの場合はルート）
+
+        Returns:
+            フォルダID
+        """
+        folder_id = self._find_folder(folder_name, parent_id)
+        if not folder_id:
+            folder_id = self._create_folder(folder_name, parent_id)
+        return folder_id
+
+    def _init_folder_structure(self) -> None:
+        """
+        Notion用のフォルダ構造を初期化
+
+        Returns:
+            None
+        """
+        try:
+            # ルートフォルダ（Notion）を作成
+            root_id = self._get_or_create_folder(self.ROOT_FOLDER_NAME)
+            self.folder_ids["root"] = root_id
+
+            # サブフォルダ（画像、動画、音声、その他）を作成
+            for folder_type, folder_name in self.FOLDER_TYPES.items():
+                folder_id = self._get_or_create_folder(folder_name, root_id)
+                self.folder_ids[folder_type] = folder_id
+
+            print(f"Notionフォルダ構造を初期化しました: {', '.join(self.FOLDER_TYPES.values())}")
+        except Exception as e:
+            print(f"フォルダ構造の初期化に失敗しました: {e}")
+
+    def _get_folder_id_by_mime_type(self, mime_type: str) -> str:
+        """
+        MIMEタイプから適切なフォルダIDを取得
+
+        Args:
+            mime_type: ファイルのMIMEタイプ
+
+        Returns:
+            フォルダID
+        """
+        if "image" in mime_type:
+            return self.folder_ids.get("image", self.folder_ids.get("root"))
+        elif "video" in mime_type:
+            return self.folder_ids.get("video", self.folder_ids.get("root"))
+        elif "audio" in mime_type:
+            return self.folder_ids.get("audio", self.folder_ids.get("root"))
+        else:
+            return self.folder_ids.get("other", self.folder_ids.get("root"))
 
     def upload_file_from_url(self, file_url: str, file_name: str, mime_type: Optional[str] = None) -> Tuple[str, str]:
         """
@@ -80,7 +217,15 @@ class GoogleDriveClient:
                     # デフォルトのMIMEタイプ
                     mime_type = 'application/octet-stream'
 
-            print(f"ファイル '{file_name}' をGoogle Driveにアップロード中 (タイプ: {mime_type})")
+            # ファイルタイプに応じたフォルダIDを取得
+            parent_folder_id = self._get_folder_id_by_mime_type(mime_type)
+            folder_type = "その他"
+            for key, folder_id in self.folder_ids.items():
+                if folder_id == parent_folder_id and key in self.FOLDER_TYPES:
+                    folder_type = self.FOLDER_TYPES.get(key, "その他")
+                    break
+
+            print(f"ファイル '{file_name}' を '{folder_type}' フォルダにアップロード中 (タイプ: {mime_type})")
 
             # ファイルをメモリ上のバッファに読み込み
             file_buffer = io.BytesIO(file_content)
@@ -91,8 +236,7 @@ class GoogleDriveClient:
             # ファイルメタデータ
             file_metadata = {
                 'name': file_name,
-                # anyoneが閲覧可能に設定
-                'permissionIds': ['anyoneWithLink']
+                'parents': [parent_folder_id]
             }
 
             # アップロード実行
@@ -120,7 +264,7 @@ class GoogleDriveClient:
                 body=permission
             ).execute()
 
-            # 閲覧用URLを構築
+            # 通常の閲覧用URL
             view_url = f"https://drive.google.com/file/d/{file_id}/view"
 
             # ファイルタイプごとに適切なビューURLを生成
