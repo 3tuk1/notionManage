@@ -629,15 +629,16 @@ class NotionFileViewer:
         moved_count = 0
         upload_key = self.uploadform_tablekey.get("アップロード")
         for page in results.get("results", []):
-            page_id = page.get("id")
             properties = page.get("properties", {})
             # ファイル以外のプロパティのみ抽出
             new_props = {}
             for k, v in properties.items():
                 if k == upload_key:
                     continue
-                # プロパティ型ごとに値を整形
                 prop_type = v.get("type")
+                # "提出日時"などcreated_time/last_edited_time型はスキップ
+                if prop_type in ("created_time", "last_edited_time"):
+                    continue
                 if prop_type == "date":
                     date_val = v.get("date")
                     if date_val and date_val.get("start"):
