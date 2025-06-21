@@ -88,11 +88,13 @@ def main():
     parser.add_argument('--database_id', help='NotionデータベースのID（省略時はデフォルトのuploadformテーブルを使用）')
     parser.add_argument('--output', default='output.html', help='出力HTMLファイルのパス')
     parser.add_argument('--embed', action='store_true', help='ページにファイルを直接埋め込む')
+    parser.add_argument('--copy-to-manage', action='store_true', help='UPLOADFORM_TABLEからファイル以外のデータをDATA_MANAGE_TABLEにコピー（ファイル列はGDriveリンク）')
 
     args = parser.parse_args()
 
     # データベースIDの設定（指定がない場合はデフォルト値を使用）
     database_id = args.database_id or DEFAULT_UPLOADFORM_DB_ID
+    data_manage_db_id = os.environ.get("DATA_MANAGE_DB_ID") or os.environ.get("DATA_MANAGE_TABLEKEY")
 
     # データベースIDが提供されていない場合はエラー
     if not database_id:
@@ -118,6 +120,15 @@ def main():
     try:
         # ファイルビューアーの初期化 (Google Drive機能も初期化)
         viewer = NotionFileViewer(token=token, google_service_account_key=gdrive_key)
+
+        if args.copy_to_manage:
+            if not data_manage_db_id:
+                print("DATA_MANAGE_DB_IDまたはDATA_MANAGE_TABLEKEYが設定されていません。")
+                return
+            print(f"UPLOADFORM_TABLE({database_id})からファイル以外のデータをDATA_MANAGE_TABLE({data_manage_db_id})にコピーします...")
+            copied = viewer.migrate_and_copy_with_file_link(database_id, data_manage_db_id)
+            print(f"{copied}件コピーしました。")
+            return
 
         if args.embed:
             print(f"uploadformテーブル (ID: {database_id}) の全ページにファイルを埋め込みます...")

@@ -668,6 +668,59 @@ class NotionFileViewer:
         # 2. ファイル以外の要素を移動
         moved = self.migrate_nonfile_properties(uploadform_db_id, data_manage_db_id)
         print(f"{moved}件のデータをDATA_MANAGE_TABLE({data_manage_db_id})に移動し、UPLOADFORM_TABLEから削除しました。")
+    def migrate_and_copy_with_file_link(self, uploadform_db_id: str, data_manage_db_id: str) -> int:
+        """
+        UPLOADFORM_TABLEからファイル以外の要素をDATA_MANAGE_TABLEにコピーし、
+        ファイル列にはGDriveのリンクを設定する（削除はしない）
+        Returns: コピーした件数
+        """
+        results = self.client.query_database(uploadform_db_id)
+        upload_key = self.uploadform_tablekey.get("アップロード")
+        file_column_key = self.data_manage_tablekey.get("ファイル") or "ファイル"
+        copied_count = 0
+        for page in results.get("results", []):
+            properties = page.get("properties", {})
+            # ファイル以外のプロパティを抽出
+            new_props = {}
+            for k, v in properties.items():
+                if k == upload_key:
+                    continue
+                new_props[k] = v
+            # ファイル列のGDriveリンクを取得
+            file_links = []
+            upload_files = properties.get(upload_key, {})
+            files = upload_files.get("files", [])
+            for file_obj in files:
+                file_url = self.client.get_file_url(file_obj)
+                if file_url:
+                    # GDriveにアップロード
+                    file_name = file_obj.get("name", "Unnamed")
+                    file_type = self._guess_file_type(file_name, file_url)
+                    gdrive_data = self._upload_to_drive({"url": file_url, "name": file_name, "type": file_type})
+                    gdrive_url = gdrive_data.get("url")
+                    if gdrive_url:
+                        file_links.append({"type": "external", "name": file_name, "url": gdrive_url})
+            # ファイル列を追加
+            if file_links:
+                new_props[file_column_key] = {
+                    "type": "files",
+                    "files": file_links
+                }
+            # 空ならスキップ
+            if not new_props:
+                continue
+            # 新規ページ作成
+            create_url = f"https://api.notion.com/v1/pages"
+            payload = {
+                "parent": {"database_id": data_manage_db_id},
+                "properties": new_props
+            }
+            resp = requests.post(create_url, headers=self.client.headers, json=payload)
+            if resp.status_code == 200 or resp.status_code == 201:
+                copied_count += 1
+            else:
+                print(f"データコピー失敗: {resp.text}")
+        return copied_count
 def is_previewable_url(url: str) -> str:
     """
     Notionがプレビュー対応しているサービスのURLか判定し、
