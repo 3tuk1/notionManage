@@ -24,6 +24,9 @@ class NotionFileViewer:
         self.uploadform_tablekey = self._load_table_keys("UPLOADFORM_TABLEKEY")
         self.data_manage_tablekey = self._load_table_keys("DATA_MANAGE_TABLEKEY")
 
+        # ハードコードされたカラムIDを設定（環境変数から取得できない場合のフォールバック）
+        self.upload_column_id = "Sb%3Au"  # アップロードカラムのID
+
         # 埋め込みマーカーとなるヘッダーテキスト
         self.embed_marker = "アップロードファイル埋め込み"
 
@@ -42,10 +45,26 @@ class NotionFileViewer:
             print(f"警告: {env_var_name}環境変数が設定されていません")
             return {}
 
+        # テーブルキーが単純な文字列の場合
+        if (len(table_key_json) > 30 and
+            not table_key_json.startswith('{') and
+            not table_key_json.startswith('[') and
+            not table_key_json.startswith('"')):
+            print(f"単一の文字列IDとしてテーブルキーを処理: {env_var_name}")
+            # アップロードフォームテーブルの場合は特別な処理
+            if env_var_name == "UPLOADFORM_TABLEKEY":
+                # アップロードカラムのIDをハードコード
+                return {"アップロード": self.upload_column_id}
+            return {}
+
         try:
             return json.loads(table_key_json)
         except json.JSONDecodeError:
             print(f"警告: {env_var_name}環境変数の形式が正しくありません")
+            # アップロードフォームテーブルの場合は特別な処理
+            if env_var_name == "UPLOADFORM_TABLEKEY":
+                # アップロードカラムのIDをハードコード
+                return {"アップロード": self.upload_column_id}
             return {}
 
     def get_upload_files(self, database_id: str, page_id: Optional[str] = None) -> List[Dict]:
@@ -86,8 +105,8 @@ class NotionFileViewer:
         # アップロードカラムのプロパティIDを取得
         upload_key = self.uploadform_tablekey.get("アップロード")
         if not upload_key:
-            print("警告: アップロードカラムのIDが見つかりません")
-            return []
+            print(f"警告: アップロードカラムのIDが見つかりません。ハードコードされたIDを使用: {self.upload_column_id}")
+            upload_key = self.upload_column_id
 
         # 各ページ（テーブルの各行）を処理
         for page in results.get("results", []):
@@ -95,8 +114,21 @@ class NotionFileViewer:
             current_page_id = page.get("id")
             properties = page.get("properties", {})
 
+            print(f"ページ {current_page_id} のプロパティを処理中...")
+            print(f"利用可能なプロパティ: {', '.join(properties.keys())}")
+
             # このページの「アップロード」カラムの値を取得
             upload_files = properties.get(upload_key, {})
+
+            if not upload_files:
+                print(f"警告: ページ {current_page_id} でアップロードカラム({upload_key})が見つかりません")
+                # IDでも名前でも見つからない場合はfiles型のプロパティを探す
+                for prop_name, prop_value in properties.items():
+                    prop_type = prop_value.get("type")
+                    if prop_type == "files":
+                        print(f"代替: '{prop_name}' (type: {prop_type})を使用")
+                        upload_files = prop_value
+                        break
 
             # アップロードされたファイルを処理
             files = upload_files.get("files", [])
@@ -111,7 +143,9 @@ class NotionFileViewer:
                         "type": self._guess_file_type(file_obj.get("name", ""), file_url)
                     }
                     files_data.append(file_data)
+                    print(f"ファイル追加: {file_data['name']}")
 
+        print(f"合計 {len(files_data)} 個のファイルを見つけました")
         return files_data
 
     def generate_embed_html(self, file_data: Dict) -> str:
