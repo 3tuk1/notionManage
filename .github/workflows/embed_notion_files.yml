@@ -2,8 +2,7 @@ name: Notion Files Embedding
 
 on:
   schedule:
-    # 毎日午前6時に実行（UTC時間、日本時間だと15時）
-    - cron: '0 6 * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
     # 手動実行用（パラメータなし）
 

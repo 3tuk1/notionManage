@@ -66,15 +66,10 @@ class GoogleDriveClient:
 
             # 共有先メールアドレス（環境変数から取得）
             self.share_with_email = os.environ.get("GDRIVE_SHARE_EMAIL", "")
-            if self.share_with_email:
-                print(f"フォルダ共有先: {self.share_with_email}")
-            else:
-                print("フォルダ共有先のメールアドレスが設定されていません。GDRIVE_SHARE_EMAIL環境変数を設定してください。")
 
             # フォルダ構造を初期化
             self._init_folder_structure()
 
-            print("Google Drive APIクライアントの初期化に成功しました")
         except Exception as e:
             raise ValueError(f"Google Drive APIクライアントの初期化に失敗しました: {e}")
 
@@ -105,11 +100,9 @@ class GoogleDriveClient:
             if items:
                 return items[0]['id']
             else:
-                print(f"フォルダ '{folder_name}' が見つかりませんでした。")
                 return None
 
         except Exception as e:
-            print(f"フォルダ検索中にエラーが発生しました: {e}")
             return None
 
     def _create_folder(self, folder_name: str, parent_id: Optional[str] = None) -> str:
@@ -141,7 +134,6 @@ class GoogleDriveClient:
         # フォルダを共有設定
         self._share_folder(folder_id)
 
-        print(f"フォルダ '{folder_name}' を作成しました（ID: {folder_id}）")
         return folder_id
 
     def _share_folder(self, folder_id: str) -> None:
@@ -177,9 +169,8 @@ class GoogleDriveClient:
                     sendNotificationEmail=False  # 通知メールを送信しない
                 ).execute()
 
-                print(f"フォルダを {self.share_with_email} と共有しました")
             except Exception as e:
-                print(f"フォルダの共有に失敗しました: {e}")
+                pass
 
     def _get_or_create_folder(self, folder_name: str, parent_id: Optional[str] = None) -> str:
         """
@@ -217,9 +208,8 @@ class GoogleDriveClient:
                 folder_id = self._get_or_create_folder(folder_name, root_id)
                 self.folder_ids[folder_type] = folder_id
 
-            print(f"Notionフォルダ構造を初期化しました: {', '.join(self.FOLDER_TYPES.values())}")
         except Exception as e:
-            print(f"フォルダ構造の初期化に失敗しました: {e}")
+            pass
 
     def _get_folder_id_by_mime_type(self, mime_type: str) -> str:
         """
@@ -253,8 +243,6 @@ class GoogleDriveClient:
             (file_id, view_url): アップロードされたファイルのIDとビューURL
         """
         try:
-            print(f"ファイル '{file_name}' をURLからダウンロード中: {file_url}")
-
             # URLからファイルをダウンロード
             response = urlopen(file_url)
             file_content = response.read()
@@ -274,8 +262,6 @@ class GoogleDriveClient:
                     folder_type = self.FOLDER_TYPES.get(key, "その他")
                     break
 
-            print(f"ファイル '{file_name}' を '{folder_type}' フォルダにアップロード中 (タイプ: {mime_type})")
-
             # ファイルをメモリ上のバッファに読み込み
             file_buffer = io.BytesIO(file_content)
 
@@ -292,49 +278,20 @@ class GoogleDriveClient:
             uploaded_file = self.service.files().create(
                 body=file_metadata,
                 media_body=media,
-                fields='id'
+                fields='id, webViewLink'
             ).execute()
 
             # ファイルIDを取得
             file_id = uploaded_file.get('id')
+            view_link = uploaded_file.get('webViewLink')
 
             if not file_id:
                 raise ValueError("ファイルアップロードに失敗しました: ファイルIDが取得できません")
 
-            print(f"アップロード成功: ファイルID = {file_id}")
-
-            # ファイル単位でanyone権限を必ず付与
-            try:
-                permission = {
-                    'type': 'anyone',
-                    'role': 'reader'
-                }
-                self.service.permissions().create(
-                    fileId=file_id,
-                    body=permission
-                ).execute()
-                print(f"ファイル (ID: {file_id}) に anyone 権限を付与しました")
-            except Exception as e:
-                print(f"ファイルの共有権限付与に失敗しました: {e}")
-
-            # 通常の閲覧用URL
-            view_url = f"https://drive.google.com/file/d/{file_id}/view"
-
-            # ファイルタイプごとに適切なビューURLを生成
-            if "image" in mime_type:
-                embed_url = f"https://drive.google.com/uc?export=view&id={file_id}"
-            elif "video" in mime_type:
-                embed_url = f"https://drive.google.com/file/d/{file_id}/preview"
-            elif "audio" in mime_type:
-                embed_url = f"https://drive.google.com/file/d/{file_id}/preview"
-            else:
-                embed_url = view_url
-
-            return file_id, embed_url
+            return file_id, view_link
 
         except Exception as e:
-            print(f"ファイルのアップロードに失敗しました: {e}")
-            raise
+            raise ValueError(f"ファイルのアップロード中にエラーが発生しました: {e}")
 
     def delete_file(self, file_id: str) -> bool:
         """
@@ -348,10 +305,8 @@ class GoogleDriveClient:
         """
         try:
             self.service.files().delete(fileId=file_id).execute()
-            print(f"ファイル (ID: {file_id}) の削除に成功しました")
             return True
         except Exception as e:
-            print(f"ファイルの削除に失敗しました: {e}")
             return False
 
     def get_folder_share_url(self, folder_type: str = "root") -> str:

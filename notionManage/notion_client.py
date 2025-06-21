@@ -118,10 +118,8 @@ class NotionClient:
         try:
             response = requests.delete(url, headers=self.headers)
             response.raise_for_status()
-            print(f"ブロック (ID: {block_id}) の削除に成功しました")
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"ブロック (ID: {block_id}) の削除に失敗しました: {e}")
             return None
 
     def get_file_url(self, file_object: Dict) -> str:
@@ -157,17 +155,12 @@ class NotionClient:
         }
 
         try:
-            print(f"リクエストURL: {url}")
-            print(f"リクエストペイロード: {json.dumps(payload, ensure_ascii=False, indent=2)}")
-
             response = requests.patch(url, json=payload, headers=self.headers)
             response.raise_for_status()
-            print(f"ブロックの追加に成功しました: {response.json()}")
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"ブロックの追加に失敗しました: {e}")
             if e.response is not None:
-                print(f"エラー詳細: {e.response.text}")
+                pass
             return None
 
     def retrieve_database(self, database_id: str) -> Dict:
