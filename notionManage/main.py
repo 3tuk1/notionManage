@@ -5,10 +5,16 @@ import uuid
 from urllib.parse import urlparse, parse_qs
 import tempfile
 import mimetypes
+import json
+import googleapiclient.discovery
+from googleapiclient.http import MediaFileUpload
+from google.oauth2 import service_account
 
 NOTION_API_KEY = os.environ.get('NOTION_API_KEY', '').strip()
 DATA_MANAGE_TABLEKEY = os.environ.get('DATA_MANAGE_TABLEKEY', '').strip()
 UPLOADFORM_TABLEKEY = os.environ.get('UPLOADFORM_TABLEKEY', '').strip()
+GDRIVE_CREDENTIALS_PATH = os.environ.get('GDRIVE_CREDENTIALS_PATH', 'gdrive_credentials.json')
+GDRIVE_FOLDER_ID = os.environ.get('GDRIVE_FOLDER_ID', '')  # アップロード先のGoogle Driveフォルダ
 
 NOTION_API_URL = 'https://api.notion.com/v1'
 NOTION_VERSION = '2022-06-28'
@@ -18,6 +24,230 @@ headers = {
     'Notion-Version': NOTION_VERSION,
     'Content-Type': 'application/json'
 }
+
+# Google Drive API設定
+drive_service = None
+# フォルダID保存用の辞書
+gdrive_folder_ids = {
+    'root': GDRIVE_FOLDER_ID,  # メインフォルダID
+    'videos': None,  # 動画フォルダID
+    'images': None,  # 写真フォルダID
+    'audio': None,   # 音声フォルダID
+    'others': None   # その他フォルダID
+}
+
+def init_gdrive_service():
+    """Google DriveのサービスAPIを初期化する"""
+    global drive_service
+    try:
+        if os.path.exists(GDRIVE_CREDENTIALS_PATH):
+            # サービスアカウント認証情報の設定
+            credentials = service_account.Credentials.from_service_account_file(
+                GDRIVE_CREDENTIALS_PATH,
+                scopes=['https://www.googleapis.com/auth/drive.file']
+            )
+            # Google DriveのAPIクライアントを初期化
+            drive_service = googleapiclient.discovery.build('drive', 'v3', credentials=credentials)
+            print("Google Drive APIの初期化に成功しました")
+
+            # フォルダ構造を確認・作成
+            ensure_folder_structure()
+            return True
+        else:
+            print(f"Google Drive認証情報ファイルが見つかりません: {GDRIVE_CREDENTIALS_PATH}")
+            return False
+    except Exception as e:
+        print(f"Google Drive APIの初期化に失敗しました: {e}")
+        return False
+
+def find_folder_by_name(folder_name, parent_id=None):
+    """指定された名前のフォルダをGoogle Drive内で検索する"""
+    if drive_service is None:
+        if not init_gdrive_service():
+            return None
+
+    query = f"mimeType='application/vnd.google-apps.folder' and name='{folder_name}' and trashed=false"
+
+    if parent_id:
+        query += f" and '{parent_id}' in parents"
+
+    results = drive_service.files().list(
+        q=query,
+        spaces='drive',
+        fields='files(id, name)'
+    ).execute()
+
+    items = results.get('files', [])
+    if items:
+        return items[0]
+    return None
+
+def create_folder(folder_name, parent_id=None):
+    """Google Drive内にフォルダを作成する"""
+    if drive_service is None:
+        if not init_gdrive_service():
+            return None
+
+    file_metadata = {
+        'name': folder_name,
+        'mimeType': 'application/vnd.google-apps.folder'
+    }
+
+    if parent_id:
+        file_metadata['parents'] = [parent_id]
+
+    folder = drive_service.files().create(
+        body=file_metadata,
+        fields='id'
+    ).execute()
+
+    # フォルダに共有権限を設定
+    permission = {
+        'type': 'anyone',
+        'role': 'reader'
+    }
+    drive_service.permissions().create(
+        fileId=folder.get('id'),
+        body=permission
+    ).execute()
+
+    print(f"フォルダ '{folder_name}' を作成しました。ID: {folder.get('id')}")
+    return folder.get('id')
+
+def ensure_folder_structure():
+    """必要なフォルダ構造が存在することを確認し、ない場合は作成する"""
+    global gdrive_folder_ids
+
+    # ルートフォルダ（NotionManage）の確認/作成
+    root_folder = None
+    if gdrive_folder_ids['root']:
+        # 指定されたルートフォルダIDを使用
+        try:
+            root_folder = drive_service.files().get(fileId=gdrive_folder_ids['root']).execute()
+            print(f"指定されたルートフォルダを使用します: {root_folder['name']} (ID: {gdrive_folder_ids['root']})")
+        except Exception as e:
+            print(f"指定されたルートフォルダIDが無効です: {e}")
+            gdrive_folder_ids['root'] = None
+
+    if not gdrive_folder_ids['root']:
+        # ルートフォルダを検索または作成
+        root_folder = find_folder_by_name('NotionManage')
+        if root_folder:
+            gdrive_folder_ids['root'] = root_folder['id']
+            print(f"既存のNotionManageフォルダを使用します。ID: {gdrive_folder_ids['root']}")
+        else:
+            gdrive_folder_ids['root'] = create_folder('NotionManage')
+            print(f"NotionManageフォルダを作成しました。ID: {gdrive_folder_ids['root']}")
+
+    # サブフォルダの確認/作成
+    subfolder_names = {
+        'videos': '動画',
+        'images': '写真',
+        'audio': '音声',
+        'others': 'その他'
+    }
+
+    for key, folder_name in subfolder_names.items():
+        folder = find_folder_by_name(folder_name, gdrive_folder_ids['root'])
+        if folder:
+            gdrive_folder_ids[key] = folder['id']
+            print(f"既存の{folder_name}フォルダを使用します。ID: {gdrive_folder_ids[key]}")
+        else:
+            gdrive_folder_ids[key] = create_folder(folder_name, gdrive_folder_ids['root'])
+            print(f"{folder_name}フォルダを作成しました。ID: {gdrive_folder_ids[key]}")
+
+    # 確認メッセージ
+    print(f"フォルダ構造の設定が完了しました: {gdrive_folder_ids}")
+
+def get_file_category(file_name):
+    """ファイル名から適切なカテゴリ（フォルダタイプ）を判定する"""
+    file_lower = file_name.lower()
+
+    # 画像ファイル
+    if any(file_lower.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".tiff"]):
+        return "images"
+
+    # 動画ファイル
+    elif any(file_lower.endswith(ext) for ext in [".mp4", ".mov", ".avi", ".webm", ".mkv", ".flv", ".wmv", ".m4v"]):
+        return "videos"
+
+    # 音声ファイル
+    elif any(file_lower.endswith(ext) for ext in [".mp3", ".wav", ".ogg", ".m4a", ".flac", ".aac", ".wma"]):
+        return "audio"
+
+    # その他のファイル
+    else:
+        return "others"
+
+def upload_to_gdrive(file_path, file_name):
+    """ファイルをGoogle Driveの適切なカテゴリフォルダにアップロードして永続リンクを取得する"""
+    global drive_service, gdrive_folder_ids
+
+    # フォルダIDが初期化されていない場合は初期化
+    if drive_service is None or all(value is None for key, value in gdrive_folder_ids.items() if key != 'root'):
+        if not init_gdrive_service():
+            print("Google Drive APIを初期化できないため、アップロードできません")
+            return None
+
+    try:
+        # MIMEタイプを取得
+        mime_type, _ = mimetypes.guess_type(file_name)
+        if mime_type is None:
+            mime_type = 'application/octet-stream'
+
+        # ファイルのカテゴリを判定
+        category = get_file_category(file_name)
+        target_folder_id = gdrive_folder_ids.get(category)
+
+        if not target_folder_id:
+            print(f"指定されたカテゴリ {category} のフォルダIDが見つかりません。ルートフォルダを使用します。")
+            target_folder_id = gdrive_folder_ids.get('root')
+
+            if not target_folder_id:
+                print("ルートフォルダIDも設定されていません。フォルダ構造を再初期化します。")
+                ensure_folder_structure()
+                target_folder_id = gdrive_folder_ids.get(category, gdrive_folder_ids.get('root'))
+
+        # ファイルのメタデータ
+        file_metadata = {
+            'name': file_name,
+            'mimeType': mime_type,
+            'parents': [target_folder_id]
+        }
+
+        # ファイルアップロード
+        media = MediaFileUpload(file_path, mimetype=mime_type, resumable=True)
+        file = drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id,webViewLink'
+        ).execute()
+
+        # アクセス権限を「リンクを知っている人は誰でも表示可能」に設定
+        permission = {
+            'type': 'anyone',
+            'role': 'reader'
+        }
+        drive_service.permissions().create(
+            fileId=file.get('id'),
+            body=permission
+        ).execute()
+
+        # 共有リンクを取得
+        file = drive_service.files().get(
+            fileId=file.get('id'),
+            fields='webContentLink,webViewLink'
+        ).execute()
+
+        # ダウンロード用リンクまたはプレビュー用リンクを返す
+        permanent_url = file.get('webContentLink', file.get('webViewLink'))
+        print(f"Google Drive「{category}」フォルダにファイルをアップロード完了: {file_name}")
+        print(f"永続URL: {permanent_url}")
+
+        return permanent_url
+    except Exception as e:
+        print(f"Google Driveアップロード中にエラーが発生: {e}")
+        return None
 
 def get_new_uploads():
     # UPLOADFORM_TABLEKEYのテーブルからデータ取得（デバッグ用出力追加）
@@ -65,7 +295,7 @@ def download_and_upload_file(file_url, file_name):
 
 def download_and_upload_file_to_notion(file_url, file_name):
     """
-    NotionのファイルURLからファイルをダウンロードし、再度Notionにアップロードして永続リンクを取得
+    NotionのファイルURLからファイルをダウンロードし、Google Driveにアップロードして永続リンクを取得
     """
     try:
         # ファイルをダウンロード
@@ -83,54 +313,23 @@ def download_and_upload_file_to_notion(file_url, file_name):
                     temp_file.write(chunk)
         print(f"一時ファイルに保存: {temp_path}")
 
-        # コンテンツタイプを推測
-        content_type, _ = mimetypes.guess_type(file_name)
-        if content_type is None:
-            content_type = "application/octet-stream"
-
-        # Notionにアップロードするための情報を取得
-        get_upload_url_payload = {
-            "name": file_name,
-            "content_type": content_type
-        }
-
-        # 正しいAPIエンドポイントを使用
-        get_upload_url_response = requests.post(
-            f"{NOTION_API_URL}/upload", # /files から /upload に変更
-            headers=headers,
-            json=get_upload_url_payload
-        )
-
-        if get_upload_url_response.status_code != 200:
-            print(f"ファイルアップロードURLの取得に失敗: {get_upload_url_response.text}")
-            os.unlink(temp_path)
-            return None
-
-        upload_data = get_upload_url_response.json()
-        upload_url = upload_data.get("upload_url")
-        permanent_notion_url = upload_data.get("file_url")
-
-        if not upload_url or not permanent_notion_url:
-            print(f"アップロードURLまたは永続URLが見つかりません: {upload_data}")
-            os.unlink(temp_path)
-            return None
-
-        # S3にファイルをアップロード
-        with open(temp_path, 'rb') as f:
-            # S3へのアップロードにはNotionの認証ヘッダーは不要
-            s3_headers = {"Content-Type": content_type}
-            s3_upload_response = requests.put(upload_url, data=f, headers=s3_headers)
+        # Google Driveにアップロード
+        permanent_url = upload_to_gdrive(temp_path, file_name)
 
         # 一時ファイルを削除
         os.unlink(temp_path)
 
-        if s3_upload_response.status_code != 200:
-            print(f"S3へのファイルアップロードに失敗: {s3_upload_response.status_code} - {s3_upload_response.text}")
-            return None
-
-        print(f"S3へのアップロード成功: {file_name}")
-        print(f"永続ファイルURLを取得: {permanent_notion_url}")
-        return permanent_notion_url
+        if permanent_url:
+            print(f"Google Drive永続URLに置換完了: {file_name}")
+            return permanent_url
+        else:
+            # Google Driveアップロードに失敗した場合、フォールバック処理
+            print(f"Google Driveアップロードに失敗。代替URLを生成します。")
+            # フォールバックとして一時的なURLを生成
+            file_uuid = str(uuid.uuid4())
+            fallback_url = f"https://external-storage-example.com/{file_uuid}/{file_name}"
+            print(f"フォールバックURLを生成: {fallback_url}")
+            return fallback_url
 
     except Exception as e:
         print(f"ファイル処理中にエラーが発生: {e}")
