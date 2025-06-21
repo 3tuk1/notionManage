@@ -403,69 +403,110 @@ class NotionFileViewer:
         if self.google_drive_client:
             drive_file_data = self._upload_to_drive(file_data)
             file_url = drive_file_data.get("url")
+            original_url = drive_file_data.get("original_url", "")
+            file_id = drive_file_data.get("google_drive_id", "")
 
         print(f"ファイル '{file_name}' のブロック作成 (タイプ: {file_type})")
 
         # ファイル種類によって異なるブロックを作成
         if "image" in file_type:
             print(f"画像ファイルとして処理: {file_url}")
-            # 埋め込みブロック
-            embed_block = {
+
+            # 画像ブロックとして追加（embedではなくimage型）
+            image_block = {
                 "object": "block",
-                "type": "embed",
-                "embed": {
-                    "url": file_url
+                "type": "image",
+                "image": {
+                    "type": "external",
+                    "external": {
+                        "url": file_url
+                    }
                 }
             }
-            blocks.append(embed_block)
+            blocks.append(image_block)
 
-            # キャプションは別のパラグラフブロックで表示
-            caption_block = {
+            # 元のURLへのリンクも追加
+            link_block = {
                 "object": "block",
                 "type": "paragraph",
                 "paragraph": {
                     "rich_text": [{
                         "type": "text",
                         "text": {
-                            "content": f"画像: {file_name}"
+                            "content": f"画像: {file_name}",
+                            "link": {"url": file_url}
                         }
                     }]
                 }
             }
-            blocks.append(caption_block)
+            blocks.append(link_block)
 
         elif "video" in file_type:
             print(f"動画ファイルとして処理: {file_url}")
 
-            # 埋め込みブロック
-            embed_block = {
-                "object": "block",
-                "type": "embed",
-                "embed": {
-                    "url": file_url
+            # 代替: ビデオプレーヤーブロック (もし利用可能なら)
+            if "drive.google.com" in file_url and "/preview" in file_url:
+                # Google Driveの埋め込みiframeを作成するためのブロック
+                video_block = {
+                    "object": "block",
+                    "type": "video",
+                    "video": {
+                        "type": "external",
+                        "external": {
+                            "url": file_url
+                        }
+                    }
                 }
-            }
-            blocks.append(embed_block)
+                blocks.append(video_block)
+            else:
+                # 通常の埋め込みリンク
+                embed_block = {
+                    "object": "block",
+                    "type": "embed",
+                    "embed": {
+                        "url": file_url
+                    }
+                }
+                blocks.append(embed_block)
 
-            # 動画のタイトルを表示
-            title_block = {
+            # 視聴用リンクを追加
+            view_url = f"https://drive.google.com/file/d/{file_id}/view" if file_id else file_url
+            link_block = {
                 "object": "block",
                 "type": "paragraph",
                 "paragraph": {
                     "rich_text": [{
                         "type": "text",
                         "text": {
-                            "content": f"動画: {file_name}"
+                            "content": f"動画を開く: {file_name}",
+                            "link": {"url": view_url}
                         }
                     }]
                 }
             }
-            blocks.append(title_block)
+            blocks.append(link_block)
 
         elif "audio" in file_type:
             print(f"音声ファイルとして処理: {file_url}")
 
-            # 埋め込みブロック
+            # 音声ファイル用のブロック (Notionは専用のaudioブロックをサポートしていない)
+            # リンクとして表示
+            audio_link_block = {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{
+                        "type": "text",
+                        "text": {
+                            "content": f"🔊 音声を再生: {file_name}",
+                            "link": {"url": file_url}
+                        }
+                    }]
+                }
+            }
+            blocks.append(audio_link_block)
+
+            # 埋め込みも試みる
             embed_block = {
                 "object": "block",
                 "type": "embed",
@@ -474,21 +515,6 @@ class NotionFileViewer:
                 }
             }
             blocks.append(embed_block)
-
-            # 音声ファイル名を表示
-            caption_block = {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {
-                            "content": f"音声: {file_name}"
-                        }
-                    }]
-                }
-            }
-            blocks.append(caption_block)
 
         else:
             print(f"一般ファイルとして処理: {file_url}")
@@ -500,7 +526,7 @@ class NotionFileViewer:
                     "rich_text": [{
                         "type": "text",
                         "text": {
-                            "content": file_name,
+                            "content": f"📄 {file_name} をダウンロード",
                             "link": {"url": file_url}
                         }
                     }]
@@ -508,20 +534,6 @@ class NotionFileViewer:
             }
             blocks.append(link_block)
 
-            # ファイルタイプの説明を追加
-            type_block = {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {
-                            "content": f"ファイルタイプ: {file_type}"
-                        }
-                    }]
-                }
-            }
-            blocks.append(type_block)
 
         return blocks
 
