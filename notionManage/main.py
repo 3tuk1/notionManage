@@ -10,7 +10,7 @@ NOTION_API_KEY = os.environ.get('NOTION_API_KEY', '').strip()
 DATA_MANAGE_TABLEKEY = os.environ.get('DATA_MANAGE_TABLEKEY', '').strip()
 UPLOADFORM_TABLEKEY = os.environ.get('UPLOADFORM_TABLEKEY', '').strip()
 
-NOTION_API_URL = 'https://api.notion.com/v1/'
+NOTION_API_URL = 'https://api.notion.com/v1'
 NOTION_VERSION = '2022-06-28'
 
 headers = {
@@ -21,7 +21,7 @@ headers = {
 
 def get_new_uploads():
     # UPLOADFORM_TABLEKEYのテーブルからデータ取得（デバッグ用出力追加）
-    url = f"{NOTION_API_URL}databases/{UPLOADFORM_TABLEKEY}/query"
+    url = f"{NOTION_API_URL}/databases/{UPLOADFORM_TABLEKEY}/query"
     response = requests.post(url, headers=headers)
     if response.status_code == 200:
         data = response.json()
