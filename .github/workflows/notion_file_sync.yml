@@ -1,8 +1,8 @@
-name: Notion File Sync
+name: Notion File Manager
 
 on:
   schedule:
-    # 毎日午前3時に実行（UTC時間）
+    # 毎日午前3時に実行（UTC時間）- 日本時間だと正午頃
     - cron: '0 3 * * *'
   # 手動実行も可能に
   workflow_dispatch:
@@ -12,31 +12,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: チェックアウト
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Pythonのセットアップ
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: 依存関係のインストール
         run: |
           python -m pip install --upgrade pip
-          pip install requests google-api-python-client google-auth google-auth-oauthlib
+          pip install requests
 
-      - name: Run Notion file sync script
+      - name: 一時ディレクトリの作成
+        run: mkdir -p /tmp/notion_temp
+
+      - name: Notionファイル管理スクリプトの実行
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           DATA_MANAGE_TABLEKEY: ${{ secrets.DATA_MANAGE_TABLEKEY }}
           UPLOADFORM_TABLEKEY: ${{ secrets.UPLOADFORM_TABLEKEY }}
-          GDRIVE_CREDENTIALS_BASE64: ${{ secrets.GDRIVE_CREDENTIALS_BASE64 }}
+          TEMP_DIR: /tmp/notion_temp
         run: |
-          python notionManage/github_sync.py
+          python notionManage/notion_file_manager.py
 
-      - name: Commit and push if there are changes
+      - name: 一時ファイルのクリーンアップ
         run: |
-          git config --global user.name 'GitHub Action'
-          git config --global user.email 'action@github.com'
-          git add -A
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-sync Notion files $(date +'%Y-%m-%d')" && git push)
+          rm -rf /tmp/notion_temp
+          echo "一時ファイルを削除しました"

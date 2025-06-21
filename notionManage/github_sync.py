@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-import os
 import base64
-import json
-import requests
-import re
-import uuid
-from urllib.parse import urlparse, parse_qs
-import tempfile
 import mimetypes
-from datetime import datetime
+import os
+import re
+import tempfile
+import uuid
 from pathlib import Path
+
+import requests
 
 # 設定
 NOTION_API_KEY = os.environ.get('NOTION_API_KEY', '').strip()
