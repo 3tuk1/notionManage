@@ -747,6 +747,7 @@ class NotionFileViewer:
                 new_props["名前"] = {"title": [{"type": "text", "text": {"content": page_id}}]}
 
             for k, v in properties.items():
+                print(f"Processing property: {k}, Value: {v}")  # プロパティのログ出力
                 if k == upload_key:
                     # GDriveリンクを生成して設定
                     file_url = self.google_drive_client.upload_file(v.get("file"))  # ファイルをアップロードしてリンクを取得
@@ -759,7 +760,7 @@ class NotionFileViewer:
                         new_props[date_column_key] = {"date": {"start": date_val["start"]}}
                     continue
                 if k == "プロジェクト管理テーブル" and category_column_key in data_manage_keys:
-                    # カテゴリを設定
+                    # プロジェクト管理テーブルのデータを設定
                     category_val = v.get("select")
                     if category_val:
                         new_props[category_column_key] = {"select": category_val}
