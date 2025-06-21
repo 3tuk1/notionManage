@@ -734,16 +734,16 @@ class NotionFileViewer:
         copied_count = 0
         for page in results.get("results", []):
             properties = page.get("properties", {})
-            # ファイル以外のプロパティを抽出
             new_props = {}
+            # コピー先ページ名はコピー元のページID
+            page_id = page.get("id")
+            new_props["名前"] = {"title": [{"type": "text", "text": {"content": page_id}}]}
             for k, v in properties.items():
                 if k == upload_key:
                     continue
-                # "提出日時"という名前のプロパティは必ず除外
                 if k == "提出日時":
                     continue
                 prop_type = v.get("type")
-                # created_time/last_edited_time型も除外
                 if prop_type in ("created_time", "last_edited_time"):
                     continue
                 if prop_type == "date":
@@ -751,9 +751,7 @@ class NotionFileViewer:
                     if date_val and date_val.get("start"):
                         new_props[k] = {"date": {"start": date_val["start"]}}
                 elif prop_type == "title":
-                    title_val = v.get("title")
-                    if title_val:
-                        new_props[k] = {"title": title_val}
+                    continue  # 名前は上書きするのでスキップ
                 elif prop_type == "rich_text":
                     rich_val = v.get("rich_text")
                     if rich_val:
@@ -802,23 +800,19 @@ class NotionFileViewer:
             for file_obj in files:
                 file_url = self.client.get_file_url(file_obj)
                 if file_url:
-                    # GDriveにアップロード
                     file_name = file_obj.get("name", "Unnamed")
                     file_type = self._guess_file_type(file_name, file_url)
                     gdrive_data = self._upload_to_drive({"url": file_url, "name": file_name, "type": file_type})
                     gdrive_url = gdrive_data.get("url")
                     if gdrive_url:
                         file_links.append({"type": "external", "name": file_name, "url": gdrive_url})
-            # ファイル列を追加
             if file_links:
                 new_props[file_column_key] = {
                     "type": "files",
                     "files": file_links
                 }
-            # 空ならスキップ
             if not new_props:
                 continue
-            # 新規ページ作成
             create_url = f"https://api.notion.com/v1/pages"
             payload = {
                 "parent": {"database_id": data_manage_db_id},
