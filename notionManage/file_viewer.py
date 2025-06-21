@@ -818,7 +818,9 @@ class NotionFileViewer:
 
                     copied_count += 1
                 except Exception as e:
-                    #print(f"ページ '{title}' のコピーまたは削除中にエラーが発生しました: {e}")
+                    print(f"ページのコピーまたは削除中にエラーが発生しました: {e}")
+                    # エラーが発生しても処理を続行するためにpass
+                    pass
 
         return copied_count
 def is_previewable_url(url: str) -> str:
