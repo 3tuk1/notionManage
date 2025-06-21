@@ -1,10 +1,40 @@
 import os
+import json
 import argparse
 from notionManage.file_viewer import NotionFileViewer
 
-# Notionデータベース（テーブル）のデフォルトID
+# Notionデータベース（テーブル）のデフォルトID取得
+def get_default_db_id():
+    """
+    環境変数からNotionデータベースIDを取得
+
+    まずUPLOADFORM_DB_IDから直接取得を試み、
+    なければUPLOADFORM_TABLEKEYから関連情報を抽出
+    """
+    # 直接設定されているデータベースIDを確認
+    direct_db_id = os.environ.get("UPLOADFORM_DB_ID", "")
+    if direct_db_id:
+        return direct_db_id
+
+    # UPLOADFORM_TABLEKEYからデータベースIDを取得
+    try:
+        table_key_json = os.environ.get("UPLOADFORM_TABLEKEY", "{}")
+        table_key = json.loads(table_key_json)
+
+        # 関係カラムからデータベースIDを抽出
+        for column_name, column_data in table_key.items():
+            column_type = column_data.get("type", "")
+            if column_type == "relation":
+                relation_data = column_data.get("relation", {})
+                if relation_data:
+                    return relation_data.get("database_id", "")
+    except Exception as e:
+        print(f"UPLOADFORM_TABLEKEYの解析エラー: {e}")
+
+    return ""
+
 # uploadformtableに対応するデータベースID
-DEFAULT_UPLOADFORM_DB_ID = os.environ.get("UPLOADFORM_DB_ID", "")
+DEFAULT_UPLOADFORM_DB_ID = get_default_db_id()
 
 def main():
     """
@@ -29,7 +59,10 @@ def main():
 
     # データベースIDが提供されていない場合はエラー
     if not database_id:
-        print("エラー: データベースIDが指定されていません。--database_id引数を指定するか、UPLOADFORM_DB_ID環境変数を設定してください。")
+        print("エラー: データベースIDが指定されていません。以下のいずれかを設定してください。")
+        print("1. --database_id コマンドライン引数")
+        print("2. UPLOADFORM_DB_ID 環境変数")
+        print("3. UPLOADFORM_TABLEKEY 環境変数（データベース関連情報を含むもの）")
         return
 
     # 環境変数からNotionトークンを取得
