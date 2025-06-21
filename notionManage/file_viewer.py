@@ -655,6 +655,19 @@ class NotionFileViewer:
             else:
                 print(f"データ移動失敗: {resp.text}")
         return moved_count
+
+    def embed_and_migrate(self, uploadform_db_id: str, data_manage_db_id: str) -> None:
+        """
+        1. UPLOADFORM_TABLEの全ページにgdriveファイルのみ埋め込み
+        2. ファイル以外の要素をDATA_MANAGE_TABLEに移動し、UPLOADFORM_TABLEから削除
+        """
+        # 1. ファイル埋め込み（gdriveのみ）
+        print(f"UPLOADFORM_TABLE({uploadform_db_id})の全ページにgdriveファイルを埋め込みます...")
+        self.embed_files_to_notion_pages(uploadform_db_id)
+        print("ファイル埋め込み完了。ファイル以外の要素を移動します...")
+        # 2. ファイル以外の要素を移動
+        moved = self.migrate_nonfile_properties(uploadform_db_id, data_manage_db_id)
+        print(f"{moved}件のデータをDATA_MANAGE_TABLE({data_manage_db_id})に移動し、UPLOADFORM_TABLEから削除しました。")
 def is_previewable_url(url: str) -> str:
     """
     Notionがプレビュー対応しているサービスのURLか判定し、
@@ -664,9 +677,9 @@ def is_previewable_url(url: str) -> str:
     # Google Drive /preview であればembed
     if re.search(r"drive.google.com/.+/preview", url):
         return 'embed'
-    # Google Drive 画像直リンク（uc?export=view&id=...）はimage
+    # Google Drive 画像直リンク（uc?export=view&id=...）もembed（Notion imageブロック非対応のため）
     if re.search(r"drive.google.com/uc\?export=view&id=", url):
-        return 'image'
+        return 'embed'
     # YouTube, Vimeo, Twitter, imgur, Dropbox, SoundCloud など
     if re.search(r"(youtube.com|youtu.be)", url):
         return 'video'
