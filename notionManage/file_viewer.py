@@ -635,10 +635,10 @@ class NotionFileViewer:
             for k, v in properties.items():
                 if k == upload_key:
                     continue
-                prop_type = v.get("type")
                 # "提出日時"という名前のプロパティは必ず除外
                 if k == "提出日時":
                     continue
+                prop_type = v.get("type")
                 # created_time/last_edited_time型も除外
                 if prop_type in ("created_time", "last_edited_time"):
                     continue
@@ -739,7 +739,62 @@ class NotionFileViewer:
             for k, v in properties.items():
                 if k == upload_key:
                     continue
-                new_props[k] = v
+                # "提出日時"という名前のプロパティは必ず除外
+                if k == "提出日時":
+                    continue
+                prop_type = v.get("type")
+                # created_time/last_edited_time型も除外
+                if prop_type in ("created_time", "last_edited_time"):
+                    continue
+                if prop_type == "date":
+                    date_val = v.get("date")
+                    if date_val and date_val.get("start"):
+                        new_props[k] = {"date": {"start": date_val["start"]}}
+                elif prop_type == "title":
+                    title_val = v.get("title")
+                    if title_val:
+                        new_props[k] = {"title": title_val}
+                elif prop_type == "rich_text":
+                    rich_val = v.get("rich_text")
+                    if rich_val:
+                        new_props[k] = {"rich_text": rich_val}
+                elif prop_type == "select":
+                    select_val = v.get("select")
+                    if select_val:
+                        new_props[k] = {"select": select_val}
+                elif prop_type == "multi_select":
+                    multi_val = v.get("multi_select")
+                    if multi_val:
+                        new_props[k] = {"multi_select": multi_val}
+                elif prop_type == "number":
+                    num_val = v.get("number")
+                    if num_val is not None:
+                        new_props[k] = {"number": num_val}
+                elif prop_type == "url":
+                    url_val = v.get("url")
+                    if url_val:
+                        new_props[k] = {"url": url_val}
+                elif prop_type == "people":
+                    people_val = v.get("people")
+                    if people_val:
+                        new_props[k] = {"people": people_val}
+                elif prop_type == "email":
+                    email_val = v.get("email")
+                    if email_val:
+                        new_props[k] = {"email": email_val}
+                elif prop_type == "phone_number":
+                    phone_val = v.get("phone_number")
+                    if phone_val:
+                        new_props[k] = {"phone_number": phone_val}
+                elif prop_type == "checkbox":
+                    check_val = v.get("checkbox")
+                    if check_val is not None:
+                        new_props[k] = {"checkbox": check_val}
+                elif prop_type == "relation":
+                    rel_val = v.get("relation")
+                    if rel_val:
+                        new_props[k] = {"relation": rel_val}
+                # 他の型も必要に応じて追加
             # ファイル列のGDriveリンクを取得
             file_links = []
             upload_files = properties.get(upload_key, {})
