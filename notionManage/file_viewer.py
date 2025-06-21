@@ -411,81 +411,97 @@ class NotionFileViewer:
         # ファイル種類によって異なるブロックを作成
         if "image" in file_type:
             print(f"画像ファイルとして処理: {file_url}")
-
-            # 画像ブロックとして追加（embedではなくimage型）
-            image_block = {
-                "object": "block",
-                "type": "image",
-                "image": {
-                    "type": "external",
-                    "external": {
-                        "url": file_url
+            # Google Drive画像は埋め込み不可なのでリンクのみ
+            if "drive.google.com" in file_url:
+                link_block = {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {
+                                "content": f"画像: {file_name}",
+                                "link": {"url": file_url}
+                            }
+                        }]
                     }
                 }
-            }
-            blocks.append(image_block)
-
-            # 元のURLへのリンクも追加
-            link_block = {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {
-                            "content": f"画像: {file_name}",
-                            "link": {"url": file_url}
+                blocks.append(link_block)
+            else:
+                # 画像ブロックとして追加（Notionがサポートする外部URLのみ）
+                image_block = {
+                    "object": "block",
+                    "type": "image",
+                    "image": {
+                        "type": "external",
+                        "external": {
+                            "url": file_url
                         }
-                    }]
+                    }
                 }
-            }
-            blocks.append(link_block)
+                blocks.append(image_block)
+                # 元のURLへのリンクも追加
+                link_block = {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {
+                                "content": f"画像: {file_name}",
+                                "link": {"url": file_url}
+                            }
+                        }]
+                    }
+                }
+                blocks.append(link_block)
 
         elif "video" in file_type:
             print(f"動画ファイルとして処理: {file_url}")
-
-            # Google Driveの動画はuc?export=view形式でのみ埋め込みを試みる
-            notion_video_url = ""
+            # Google Drive動画は埋め込み不可なのでリンクのみ
             if "drive.google.com" in file_url:
-                # id抽出
-                import re
-                m = re.search(r"id=([\w-]+)", file_url)
-                if not m:
-                    m = re.search(r"/file/d/([\w-]+)", file_url)
-                if m:
-                    file_id = m.group(1)
-                    notion_video_url = f"https://drive.google.com/uc?export=view&id={file_id}"
-            if notion_video_url:
+                link_block = {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {
+                                "content": f"動画を開く: {file_name}",
+                                "link": {"url": file_url}
+                            }
+                        }]
+                    }
+                }
+                blocks.append(link_block)
+            else:
+                # Notionがサポートする外部URLのみvideoブロック
                 video_block = {
                     "object": "block",
                     "type": "video",
                     "video": {
                         "type": "external",
                         "external": {
-                            "url": notion_video_url
+                            "url": file_url
                         }
                     }
                 }
                 blocks.append(video_block)
-            else:
-                # 埋め込み不可の場合はリンクのみ
-                print("Notionで埋め込み可能な動画URLがありません。リンクのみ表示します。")
-
-            # 視聴用リンクを追加
-            link_block = {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {
-                            "content": f"動画を開く: {file_name}",
-                            "link": {"url": file_url}
-                        }
-                    }]
+                # 視聴用リンクも追加
+                link_block = {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [{
+                            "type": "text",
+                            "text": {
+                                "content": f"動画を開く: {file_name}",
+                                "link": {"url": file_url}
+                            }
+                        }]
+                    }
                 }
-            }
-            blocks.append(link_block)
+                blocks.append(link_block)
 
         elif "audio" in file_type:
             print(f"音声ファイルとして処理: {file_url}")
