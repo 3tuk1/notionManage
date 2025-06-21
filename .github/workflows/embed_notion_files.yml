@@ -5,12 +5,7 @@ on:
     # 毎日午前6時に実行（UTC時間、日本時間だと15時）
     - cron: '0 6 * * *'
   workflow_dispatch:
-    # 手動実行用
-    inputs:
-      page_id:
-        description: '特定のページIDを指定（省略時は全ページ処理）'
-        required: false
-        default: ''
+    # 手動実行用（パラメータなし）
 
 jobs:
   embed-files:
@@ -39,16 +34,8 @@ jobs:
 
       - name: Notionページへのファイル埋め込み実行
         run: |
-          echo "uploadformテーブルのファイルをNotionページに埋め込みます..."
-          
-          # ページIDが指定されていればそれを使用
-          if [ -n "${{ github.event.inputs.page_id }}" ]; then
-            echo "特定のページを処理: ${{ github.event.inputs.page_id }}"
-            python main.py --page_id "${{ github.event.inputs.page_id }}" --embed
-          else
-            echo "uploadformテーブルの全ページを処理"
-            python main.py --embed
-          fi
+          echo "uploadformテーブルの全ページにファイルを埋め込みます..."
+          python main.py --embed
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           UPLOADFORM_TABLEKEY: ${{ secrets.UPLOADFORM_TABLEKEY }}
