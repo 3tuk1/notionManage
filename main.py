@@ -94,7 +94,7 @@ def main():
 
     # データベースIDの設定（指定がない場合はデフォルト値を使用）
     database_id = args.database_id or DEFAULT_UPLOADFORM_DB_ID
-    data_manage_db_id = os.environ.get("DATA_MANAGE_DB_ID") or os.environ.get("DATA_MANAGE_TABLEKEY")
+    data_manage_db_id = os.environ.get("DATA_MANAGE_TABLEKEY")
 
     # データベースIDが提供されていない場合はエラー
     if not database_id:
@@ -121,10 +121,8 @@ def main():
         # ファイルビューアーの初期化 (Google Drive機能も初期化)
         viewer = NotionFileViewer(token=token, google_service_account_key=gdrive_key)
 
-        if args.copy_to_manage:
-            if not data_manage_db_id:
-                print("DATA_MANAGE_DB_IDまたはDATA_MANAGE_TABLEKEYが設定されていません。")
-                return
+        # data_manage_db_idが設定されていれば必ずコピー処理を実行
+        if data_manage_db_id:
             print(f"UPLOADFORM_TABLE({database_id})からファイル以外のデータをDATA_MANAGE_TABLE({data_manage_db_id})にコピーします...")
             copied = viewer.migrate_and_copy_with_file_link(database_id, data_manage_db_id)
             print(f"{copied}件コピーしました。")
