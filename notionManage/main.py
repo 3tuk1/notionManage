@@ -94,8 +94,9 @@ def download_and_upload_file_to_notion(file_url, file_name):
             "content_type": content_type
         }
 
+        # 正しいAPIエンドポイントを使用
         get_upload_url_response = requests.post(
-            "https://api.notion.com/v1/files",
+            f"{NOTION_API_URL}/upload", # /files から /upload に変更
             headers=headers,
             json=get_upload_url_payload
         )
