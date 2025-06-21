@@ -32,7 +32,7 @@ def get_new_uploads():
         return []
 
 def get_table_property_types(database_id):
-    url = f"{NOTION_API_URL}databases/{database_id}"
+    url = f"{NOTION_API_URL}/databases/{database_id}"
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         data = response.json()
@@ -95,7 +95,7 @@ def download_and_upload_file_to_notion(file_url, file_name):
         }
 
         get_upload_url_response = requests.post(
-            f"{NOTION_API_URL}files",
+            "https://api.notion.com/v1/files",
             headers=headers,
             json=get_upload_url_payload
         )
@@ -163,7 +163,7 @@ def extract_file_id_from_url(url):
         return None
 
 def add_to_data_manage(page_data, page_id=None, created_time=None):
-    url = f"{NOTION_API_URL}pages"
+    url = f"{NOTION_API_URL}/pages"
     data_manage_types = get_table_property_types(DATA_MANAGE_TABLEKEY)
     properties = {}
 
@@ -244,7 +244,9 @@ def add_to_data_manage(page_data, page_id=None, created_time=None):
                             file_url = permanent_url
                             file_type = "external"
                             print(f"永続URLに置換完了: {file_name}")
-
+                        else:
+                            print(f"永続URLの取得に失敗したため、ファイル {file_name} の処理をスキップします。")
+                            continue
                     # ファイル列用のオブジェクト作成
                     # 重要: Notionホストのファイルは'file'タイプで、外部URLは'external'タイプで扱う
                     if file_type == "file":
@@ -352,7 +354,7 @@ def get_table_columns(database_id):
     """
     指定したNotionデータベースの列名一覧を取得
     """
-    url = f"{NOTION_API_URL}databases/{database_id}"
+    url = f"{NOTION_API_URL}/databases/{database_id}"
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         data = response.json()
@@ -384,7 +386,7 @@ def move_uploads_to_data_manage():
     #             print(f"Failed to archive page {page_id}: {del_response.text}")
 
 def print_table_columns(database_id, label=None):
-    url = f"{NOTION_API_URL}databases/{database_id}"
+    url = f"{NOTION_API_URL}/databases/{database_id}"
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         data = response.json()
