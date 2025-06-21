@@ -18,14 +18,14 @@ class NotionFileViewer:
         Args:
             token: Notion API トークン (Noneの場合は環境変数から取得)
         """
+        # ハードコードされたカラムIDを設定（環境変数から取得できない場合のフォールバック）
+        self.upload_column_id = "Sb%3Au"  # アップロードカラムのID
+
         self.client = NotionClient(token)
 
         # repository secretsからテーブルキーを読み込み
         self.uploadform_tablekey = self._load_table_keys("UPLOADFORM_TABLEKEY")
         self.data_manage_tablekey = self._load_table_keys("DATA_MANAGE_TABLEKEY")
-
-        # ハードコードされたカラムIDを設定（環境変数から取得できない場合のフォールバック）
-        self.upload_column_id = "Sb%3Au"  # アップロードカラムのID
 
         # 埋め込みマーカーとなるヘッダーテキスト
         self.embed_marker = "アップロードファイル埋め込み"
@@ -53,7 +53,7 @@ class NotionFileViewer:
             print(f"単一の文字列IDとしてテーブルキーを処理: {env_var_name}")
             # アップロードフォームテーブルの場合は特別な処理
             if env_var_name == "UPLOADFORM_TABLEKEY":
-                # アップロードカラムのIDをハードコード
+                # アップロードカラムのIDを返す
                 return {"アップロード": self.upload_column_id}
             return {}
 
@@ -63,7 +63,7 @@ class NotionFileViewer:
             print(f"警告: {env_var_name}環境変数の形式が正しくありません")
             # アップロードフォームテーブルの場合は特別な処理
             if env_var_name == "UPLOADFORM_TABLEKEY":
-                # アップロードカラムのIDをハードコード
+                # アップロードカラムのIDを返す
                 return {"アップロード": self.upload_column_id}
             return {}
 
