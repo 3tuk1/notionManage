@@ -729,26 +729,40 @@ class NotionFileViewer:
         results = self.client.query_database(uploadform_db_id)
         upload_key = self.uploadform_tablekey.get("アップロード")
         file_column_key = self.data_manage_tablekey.get("ファイル") or "ファイル"
+        category_column_key = self.data_manage_tablekey.get("カテゴリ") or "カテゴリ"
+        date_column_key = self.data_manage_tablekey.get("提出日時") or "提出日時"
         copied_count = 0
 
         # コピー先テーブルのプロパティ名一覧を取得
         data_manage_props = self.client.retrieve_database(data_manage_db_id).get('properties', {})
         data_manage_keys = set(data_manage_props.keys())
+
         for page in results.get("results", []):
             properties = page.get("properties", {})
             new_props = {}
             page_id = page.get("id")
+
             # コピー先に"名前"プロパティがあればセット
             if "名前" in data_manage_keys:
                 new_props["名前"] = {"title": [{"type": "text", "text": {"content": page_id}}]}
+
             for k, v in properties.items():
                 if k == upload_key:
                     # GDriveリンクを生成して設定
-                    gdrive_client = self.google_drive_client  # self.google_drive_client を使用
-                    file_url = gdrive_client.upload_file(v.get("file"))  # ファイルをアップロードしてリンクを取得
+                    file_url = self.google_drive_client.upload_file(v.get("file"))  # ファイルをアップロードしてリンクを取得
                     new_props[file_column_key] = {"url": file_url}
                     continue
-                if k == "提出日時":
+                if k == "提出日時" and date_column_key in data_manage_keys:
+                    # 提出日時を設定
+                    date_val = v.get("date")
+                    if date_val and date_val.get("start"):
+                        new_props[date_column_key] = {"date": {"start": date_val["start"]}}
+                    continue
+                if k == "プロジェクト管理テーブル" and category_column_key in data_manage_keys:
+                    # カテゴリを設定
+                    category_val = v.get("select")
+                    if category_val:
+                        new_props[category_column_key] = {"select": category_val}
                     continue
                 if k not in data_manage_keys:
                     continue  # コピー先にないプロパティはスキップ
@@ -770,42 +784,8 @@ class NotionFileViewer:
                     select_val = v.get("select")
                     if select_val:
                         new_props[k] = {"select": select_val}
-                elif prop_type == "multi_select":
-                    multi_val = v.get("multi_select")
-                    if multi_val:
-                        new_props[k] = {"multi_select": multi_val}
-                elif prop_type == "number":
-                    num_val = v.get("number")
-                    if num_val is not None:
-                        new_props[k] = {"number": num_val}
-                elif prop_type == "url":
-                    url_val = v.get("url")
-                    if url_val:
-                        new_props[k] = {"url": url_val}
-                elif prop_type == "people":
-                    people_val = v.get("people")
-                    if people_val:
-                        new_props[k] = {"people": people_val}
-                elif prop_type == "email":
-                    email_val = v.get("email")
-                    if email_val:
-                        new_props[k] = {"email": email_val}
-                elif prop_type == "phone_number":
-                    phone_val = v.get("phone_number")
-                    if phone_val:
-                        new_props[k] = {"phone_number": phone_val}
-                elif prop_type == "checkbox":
-                    check_val = v.get("checkbox")
-                    if check_val is not None:
-                        new_props[k] = {"checkbox": check_val}
-                elif prop_type == "relation":
-                    rel_val = v.get("relation")
-                    if rel_val:
-                        new_props[k] = {"relation": rel_val}
-                # 他の型も必要に応じて追加
+
             # コピー先データベースに新しいプロパティを追加
-            # update_page メソッドの未解決エラーを修正
-            # update_page メソッドが存在しないため、Notion API のページ作成エンドポイントを使用
             create_url = f"https://api.notion.com/v1/pages"
             payload = {
                 "parent": {"database_id": data_manage_db_id},
@@ -816,6 +796,7 @@ class NotionFileViewer:
                 raise Exception(f"Failed to create page: {response.status_code}, {response.text}")
 
             copied_count += 1
+
         return copied_count
 def is_previewable_url(url: str) -> str:
     """
