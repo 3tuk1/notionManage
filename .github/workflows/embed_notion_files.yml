@@ -10,9 +10,11 @@ on:
       database_id:
         description: '特定のデータベースIDを指定（省略時はデフォルト値を使用）'
         required: false
+        default: ''
       page_id:
         description: '特定のページIDを指定（省略時は全ページ処理）'
         required: false
+        default: ''
 
 jobs:
   embed-files:
@@ -39,16 +41,38 @@ jobs:
           ls -la
           echo "Current directory: $(pwd)"
 
+      - name: データベースIDの確認
+        id: check-db-id
+        run: |
+          # 入力値またはシークレットからデータベースIDを設定
+          INPUT_DB_ID="${{ github.event.inputs.database_id }}"
+          SECRET_DB_ID="${{ secrets.DEFAULT_DATABASE_ID }}"
+          
+          # 入力値が設定されていればそれを使用、なければシークレットを使用
+          if [ -n "$INPUT_DB_ID" ]; then
+            echo "Using database ID from workflow input"
+            echo "database_id=$INPUT_DB_ID" >> $GITHUB_OUTPUT
+          elif [ -n "$SECRET_DB_ID" ]; then
+            echo "Using database ID from repository secrets"
+            echo "database_id=$SECRET_DB_ID" >> $GITHUB_OUTPUT
+          else
+            echo "ERROR: No database ID specified. Please provide --database_id parameter or set DEFAULT_DATABASE_ID secret."
+            exit 1
+          fi
+
       - name: Notionページへのファイル埋め込み実行
         run: |
-          # データベースIDを設定（パラメーターか環境変数から取得）
-          DB_ID="${{ github.event.inputs.database_id || secrets.DEFAULT_DATABASE_ID }}"
+          # 前のステップで検証済みのデータベースIDを使用
+          DB_ID="${{ steps.check-db-id.outputs.database_id }}"
+          echo "Using database ID: $DB_ID"
           
           # ページIDが指定されていればそれを使用
-          if [ "${{ github.event.inputs.page_id }}" != "" ]; then
-            python main.py --database_id $DB_ID --page_id ${{ github.event.inputs.page_id }} --embed
+          if [ -n "${{ github.event.inputs.page_id }}" ]; then
+            echo "Processing specific page: ${{ github.event.inputs.page_id }}"
+            python main.py --database_id "$DB_ID" --page_id "${{ github.event.inputs.page_id }}" --embed
           else
-            python main.py --database_id $DB_ID --embed
+            echo "Processing all pages in database"
+            python main.py --database_id "$DB_ID" --embed
           fi
         env:
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
