@@ -3,7 +3,7 @@ import json
 import io
 import base64
 import mimetypes
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Optional, Tuple
 from urllib.request import urlopen
 
 from google.oauth2 import service_account
@@ -128,7 +128,7 @@ class GoogleDriveClient:
         }
 
         if parent_id:
-            file_metadata['parents'] = [parent_id]
+            file_metadata['parents'] = parent_id  # 型の不一致を修正
 
         folder = self.service.files().create(
             body=file_metadata,

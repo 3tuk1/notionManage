@@ -1,6 +1,6 @@
 import os
 import requests
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, Optional
 
 class NotionClient:
     """Notion APIクライアント"""
@@ -139,7 +139,7 @@ class NotionClient:
             return file_object.get("file", {}).get("url", "")
         return ""
 
-    def append_blocks(self, page_id: str, blocks: List[Dict]) -> Dict:
+    def append_blocks(self, page_id: str, blocks: List[Dict]) -> Optional[Dict]:
         """
         ページにブロックを追加する
 
@@ -148,13 +148,21 @@ class NotionClient:
             blocks: 追加するブロックのリスト
 
         Returns:
-            APIレスポンス
+            APIレスポンスまたはNone（エラー時）
         """
         url = f"{self.base_url}/blocks/{page_id}/children"
         payload = {
             "children": blocks
         }
 
-        response = requests.patch(url, json=payload, headers=self.headers)
-        response.raise_for_status()
-        return response.json()
+        try:
+            print(f"リクエストURL: {url}")
+            print(f"リクエストペイロード: {payload}")
+
+            response = requests.patch(url, json=payload, headers=self.headers)
+            response.raise_for_status()
+            print(f"ブロックの追加に成功しました: {response.json()}")
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"ブロックの追加に失敗しました: {e}")
+            return None
