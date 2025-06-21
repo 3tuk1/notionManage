@@ -636,7 +636,10 @@ class NotionFileViewer:
                 if k == upload_key:
                     continue
                 prop_type = v.get("type")
-                # "提出日時"などcreated_time/last_edited_time型はスキップ
+                # "提出日時"という名前のプロパティは必ず除外
+                if k == "提出日時":
+                    continue
+                # created_time/last_edited_time型も除外
                 if prop_type in ("created_time", "last_edited_time"):
                     continue
                 if prop_type == "date":
