@@ -303,15 +303,19 @@ class GoogleDriveClient:
 
             print(f"アップロード成功: ファイルID = {file_id}")
 
-            # 権限を設定（anyoneが閲覧可能に）
-            permission = {
-                'type': 'anyone',
-                'role': 'reader'
-            }
-            self.service.permissions().create(
-                fileId=file_id,
-                body=permission
-            ).execute()
+            # ファイル単位でanyone権限を必ず付与
+            try:
+                permission = {
+                    'type': 'anyone',
+                    'role': 'reader'
+                }
+                self.service.permissions().create(
+                    fileId=file_id,
+                    body=permission
+                ).execute()
+                print(f"ファイル (ID: {file_id}) に anyone 権限を付与しました")
+            except Exception as e:
+                print(f"ファイルの共有権限付与に失敗しました: {e}")
 
             # 通常の閲覧用URL
             view_url = f"https://drive.google.com/file/d/{file_id}/view"

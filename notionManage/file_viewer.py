@@ -444,33 +444,34 @@ class NotionFileViewer:
         elif "video" in file_type:
             print(f"動画ファイルとして処理: {file_url}")
 
-            # 代替: ビデオプレーヤーブロック (もし利用可能なら)
-            if "drive.google.com" in file_url and "/preview" in file_url:
-                # Google Driveの埋め込みiframeを作成するためのブロック
+            # Google Driveの動画はuc?export=view形式でのみ埋め込みを試みる
+            notion_video_url = ""
+            if "drive.google.com" in file_url:
+                # id抽出
+                import re
+                m = re.search(r"id=([\w-]+)", file_url)
+                if not m:
+                    m = re.search(r"/file/d/([\w-]+)", file_url)
+                if m:
+                    file_id = m.group(1)
+                    notion_video_url = f"https://drive.google.com/uc?export=view&id={file_id}"
+            if notion_video_url:
                 video_block = {
                     "object": "block",
                     "type": "video",
                     "video": {
                         "type": "external",
                         "external": {
-                            "url": file_url
+                            "url": notion_video_url
                         }
                     }
                 }
                 blocks.append(video_block)
             else:
-                # 通常の埋め込みリンク
-                embed_block = {
-                    "object": "block",
-                    "type": "embed",
-                    "embed": {
-                        "url": file_url
-                    }
-                }
-                blocks.append(embed_block)
+                # 埋め込み不可の場合はリンクのみ
+                print("Notionで埋め込み可能な動画URLがありません。リンクのみ表示します。")
 
             # 視聴用リンクを追加
-            view_url = f"https://drive.google.com/file/d/{file_id}/view" if file_id else file_url
             link_block = {
                 "object": "block",
                 "type": "paragraph",
@@ -479,7 +480,7 @@ class NotionFileViewer:
                         "type": "text",
                         "text": {
                             "content": f"動画を開く: {file_name}",
-                            "link": {"url": view_url}
+                            "link": {"url": file_url}
                         }
                     }]
                 }

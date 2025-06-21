@@ -1,6 +1,7 @@
 import os
 import requests
 from typing import Dict, Optional, List
+import json
 
 class NotionClient:
     """Notion APIクライアント"""
@@ -157,7 +158,7 @@ class NotionClient:
 
         try:
             print(f"リクエストURL: {url}")
-            print(f"リクエストペイロード: {payload}")
+            print(f"リクエストペイロード: {json.dumps(payload, ensure_ascii=False, indent=2)}")
 
             response = requests.patch(url, json=payload, headers=self.headers)
             response.raise_for_status()
@@ -165,4 +166,6 @@ class NotionClient:
             return response.json()
         except requests.exceptions.RequestException as e:
             print(f"ブロックの追加に失敗しました: {e}")
+            if e.response is not None:
+                print(f"エラー詳細: {e.response.text}")
             return None
