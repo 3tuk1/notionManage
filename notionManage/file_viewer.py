@@ -732,17 +732,24 @@ class NotionFileViewer:
         upload_key = self.uploadform_tablekey.get("アップロード")
         file_column_key = self.data_manage_tablekey.get("ファイル") or "ファイル"
         copied_count = 0
+
+        # コピー先テーブルのプロパティ名一覧を取得
+        data_manage_props = self.client.retrieve_database(data_manage_db_id).get('properties', {})
+        data_manage_keys = set(data_manage_props.keys())
         for page in results.get("results", []):
             properties = page.get("properties", {})
             new_props = {}
-            # コピー先ページ名はコピー元のページID
             page_id = page.get("id")
-            new_props["名前"] = {"title": [{"type": "text", "text": {"content": page_id}}]}
+            # コピー先に"名前"プロパティがあればセット
+            if "名前" in data_manage_keys:
+                new_props["名前"] = {"title": [{"type": "text", "text": {"content": page_id}}]}
             for k, v in properties.items():
                 if k == upload_key:
                     continue
                 if k == "提出日時":
                     continue
+                if k not in data_manage_keys:
+                    continue  # コピー先にないプロパティはスキップ
                 prop_type = v.get("type")
                 if prop_type in ("created_time", "last_edited_time"):
                     continue
@@ -806,7 +813,7 @@ class NotionFileViewer:
                     gdrive_url = gdrive_data.get("url")
                     if gdrive_url:
                         file_links.append({"type": "external", "name": file_name, "url": gdrive_url})
-            if file_links:
+            if file_links and file_column_key in data_manage_keys:
                 new_props[file_column_key] = {
                     "type": "files",
                     "files": file_links
