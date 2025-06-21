@@ -749,7 +749,7 @@ class NotionFileViewer:
             for k, v in properties.items():
                 prop_id = v.get('id')
                 prop_type = v.get('type')
-
+                print(f"DEBUG [migrate_and_copy] property: {k}, id: {prop_id}, type: {prop_type}")
                 # 1. ファイルアップロード処理
                 if prop_id == upload_key:
                     files_list = v.get('files', [])
@@ -778,15 +778,29 @@ class NotionFileViewer:
                         new_props[date_column_key] = {'date': {'start': ct}}
                     continue
 
-                # --- 「アップロード予定のファイル」を「カテゴリ」列にコピーする特別処理 ---
+                # --- 「アップロード予定のファイル」を「カテゴリ」列にコピーする特別処理 (デバッグ版) ---
                 if k == "アップロード予定のファイル":
-                    print("★ 特殊処理: アップロード予定のファイル を検出 ★", prop_type, v)
+                    print("!!! 'アップロード予定のファイル' プロパティを検出しました !!!")
                     category_key = self.data_manage_tablekey.get("カテゴリ") or "カテゴリ"
+                    print(f"    -> コピー先のキー名: '{category_key}'")
+
                     if prop_type == "relation":
+                        print("    -> タイプは 'relation' で正しいです。")
                         relation_value = v.get("relation")
-                        if category_key in data_manage_keys and relation_value:
-                            new_props[category_key] = {"relation": relation_value}
-                    continue
+
+                        if category_key in data_manage_keys:
+                            print(f"    -> コピー先に '{category_key}' が存在します。")
+                            if relation_value:
+                                print(f"    -> コピーする値: {relation_value}")
+                                new_props[category_key] = {"relation": relation_value}
+                            else:
+                                print("    -> 警告: コピーする値がありません（リレーションが空です）。")
+                        else:
+                            print(f"    -> ★エラー: コピー先に '{category_key}' という名前の列が見つかりません。")
+                    else:
+                        print(f"    -> ★エラー: プロパティタイプが 'relation' ではありません (実際のタイプ: '{prop_type}')。")
+
+                    continue # このプロパティの処理は完了
 
                 # 4. コピー不要なプロパティをスキップ
                 if prop_type in ('title', 'created_by', 'last_edited_by', 'last_edited_time'):
