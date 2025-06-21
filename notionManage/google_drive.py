@@ -63,6 +63,13 @@ class GoogleDriveClient:
             # キャッシュしたフォルダID
             self.folder_ids = {}
 
+            # 共有先メールアドレス（環境変数から取得）
+            self.share_with_email = os.environ.get("GDRIVE_SHARE_EMAIL", "")
+            if self.share_with_email:
+                print(f"フォルダ共有先: {self.share_with_email}")
+            else:
+                print("フォルダ共有先のメールアドレスが設定されていません。GDRIVE_SHARE_EMAIL環境変数を設定してください。")
+
             # フォルダ構造を初期化
             self._init_folder_structure()
 
@@ -121,19 +128,50 @@ class GoogleDriveClient:
             fields='id'
         ).execute()
 
-        # 作成したフォルダを共有設定
-        permission = {
+        folder_id = folder['id']
+
+        # フォルダを共有設定
+        self._share_folder(folder_id)
+
+        print(f"フォルダ '{folder_name}' を作成しました（ID: {folder_id}）")
+        return folder_id
+
+    def _share_folder(self, folder_id: str) -> None:
+        """
+        フォルダを特定のユーザーと共有する
+
+        Args:
+            folder_id: 共有するフォルダID
+        """
+        # anyone with linkに設定
+        anyone_permission = {
             'type': 'anyone',
             'role': 'reader'
         }
 
         self.service.permissions().create(
-            fileId=folder['id'],
-            body=permission
+            fileId=folder_id,
+            body=anyone_permission
         ).execute()
 
-        print(f"フォルダ '{folder_name}' を作成しました（ID: {folder['id']}）")
-        return folder['id']
+        # 特定ユーザーと共有（管理者権限）
+        if self.share_with_email:
+            try:
+                user_permission = {
+                    'type': 'user',
+                    'role': 'writer',  # writer権限を付与
+                    'emailAddress': self.share_with_email
+                }
+
+                self.service.permissions().create(
+                    fileId=folder_id,
+                    body=user_permission,
+                    sendNotificationEmail=False  # 通知メールを送信しない
+                ).execute()
+
+                print(f"フォルダを {self.share_with_email} と共有しました")
+            except Exception as e:
+                print(f"フォルダの共有に失敗しました: {e}")
 
     def _get_or_create_folder(self, folder_name: str, parent_id: Optional[str] = None) -> str:
         """
@@ -149,6 +187,9 @@ class GoogleDriveClient:
         folder_id = self._find_folder(folder_name, parent_id)
         if not folder_id:
             folder_id = self._create_folder(folder_name, parent_id)
+        else:
+            # 既存のフォルダでも共有設定を確認/更新
+            self._share_folder(folder_id)
         return folder_id
 
     def _init_folder_structure(self) -> None:
@@ -300,3 +341,19 @@ class GoogleDriveClient:
         except Exception as e:
             print(f"ファイルの削除に失敗しました: {e}")
             return False
+
+    def get_folder_share_url(self, folder_type: str = "root") -> str:
+        """
+        フォルダの共有URLを取得
+
+        Args:
+            folder_type: フォルダタイプ ("root", "image", "video", "audio", "other")
+
+        Returns:
+            共有URL
+        """
+        folder_id = self.folder_ids.get(folder_type)
+        if not folder_id:
+            return ""
+
+        return f"https://drive.google.com/drive/folders/{folder_id}"

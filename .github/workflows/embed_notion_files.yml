@@ -42,3 +42,4 @@ jobs:
           DATA_MANAGE_TABLEKEY: ${{ secrets.DATA_MANAGE_TABLEKEY }}
           UPLOADFORM_DB_ID: ${{ secrets.UPLOADFORM_DB_ID }}
           GDRIVE_KEY: ${{ secrets.GDRIVE_KEY }}
+          GDRIVE_SHARE_EMAIL: ${{ secrets.GDRIVE_SHARE_EMAIL }}
