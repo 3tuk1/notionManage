@@ -185,3 +185,12 @@ class NotionClient:
         if response.status_code != 200:
             raise Exception(f"Failed to retrieve database: {response.status_code}, {response.text}")
         return response.json()
+
+    # --- ★ここからが追加するメソッド★ ---
+    def create_page(self, parent_db_id: str, properties: dict):
+        """指定されたデータベースに新しいページを作成する"""
+        return self.notion.pages.create(
+            parent={"database_id": parent_db_id},
+            properties=properties
+        )
+    # --- ★ここまで★ ---
