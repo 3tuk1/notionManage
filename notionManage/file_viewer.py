@@ -411,24 +411,8 @@ class NotionFileViewer:
         # ファイル種類によって異なるブロックを作成
         if "image" in file_type:
             print(f"画像ファイルとして処理: {file_url}")
-            # Google Drive画像は埋め込み不可なのでリンクのみ
-            if "drive.google.com" in file_url:
-                link_block = {
-                    "object": "block",
-                    "type": "paragraph",
-                    "paragraph": {
-                        "rich_text": [{
-                            "type": "text",
-                            "text": {
-                                "content": f"画像: {file_name}",
-                                "link": {"url": file_url}
-                            }
-                        }]
-                    }
-                }
-                blocks.append(link_block)
-            else:
-                # 画像ブロックとして追加（Notionがサポートする外部URLのみ）
+            preview_type = is_previewable_url(file_url)
+            if preview_type == 'image':
                 image_block = {
                     "object": "block",
                     "type": "image",
@@ -440,7 +424,17 @@ class NotionFileViewer:
                     }
                 }
                 blocks.append(image_block)
-                # 元のURLへのリンクも追加
+            elif preview_type == 'embed':
+                embed_block = {
+                    "object": "block",
+                    "type": "embed",
+                    "embed": {
+                        "url": file_url
+                    }
+                }
+                blocks.append(embed_block)
+            else:
+                # Google Driveや未サポートURLはリンクのみ
                 link_block = {
                     "object": "block",
                     "type": "paragraph",
@@ -458,24 +452,8 @@ class NotionFileViewer:
 
         elif "video" in file_type:
             print(f"動画ファイルとして処理: {file_url}")
-            # Google Drive動画は埋め込み不可なのでリンクのみ
-            if "drive.google.com" in file_url:
-                link_block = {
-                    "object": "block",
-                    "type": "paragraph",
-                    "paragraph": {
-                        "rich_text": [{
-                            "type": "text",
-                            "text": {
-                                "content": f"動画を開く: {file_name}",
-                                "link": {"url": file_url}
-                            }
-                        }]
-                    }
-                }
-                blocks.append(link_block)
-            else:
-                # Notionがサポートする外部URLのみvideoブロック
+            preview_type = is_previewable_url(file_url)
+            if preview_type == 'video':
                 video_block = {
                     "object": "block",
                     "type": "video",
@@ -487,7 +465,17 @@ class NotionFileViewer:
                     }
                 }
                 blocks.append(video_block)
-                # 視聴用リンクも追加
+            elif preview_type == 'embed':
+                embed_block = {
+                    "object": "block",
+                    "type": "embed",
+                    "embed": {
+                        "url": file_url
+                    }
+                }
+                blocks.append(embed_block)
+            else:
+                # Google Driveや未サポートURLはリンクのみ
                 link_block = {
                     "object": "block",
                     "type": "paragraph",
@@ -624,3 +612,25 @@ class NotionFileViewer:
                 print(f"ページ {page_id} へのファイル埋め込みに失敗しました: {e}")
 
         return processed_pages
+
+    def is_previewable_url(url: str) -> str:
+        """
+        Notionがプレビュー対応しているサービスのURLか判定し、
+        'image', 'video', 'embed' のいずれかを返す（該当しなければNone）
+        """
+        import re
+        # Google Drive /埋め込み であればembed
+        if re.search(r"drive.google.com/.+/埋め込み", url):
+            return 'embed'
+        # YouTube, Vimeo, Twitter, imgur, Dropbox, SoundCloud など
+        if re.search(r"(youtube.com|youtu.be)", url):
+            return 'video'
+        if re.search(r"(vimeo.com)", url):
+            return 'video'
+        if re.search(r"(imgur.com|unsplash.com|images.unsplash.com)", url):
+            return 'image'
+        if re.search(r"(dropbox.com)", url):
+            return 'image'
+        if re.search(r"(twitter.com|soundcloud.com)", url):
+            return 'embed'
+        return None
