@@ -613,24 +613,33 @@ class NotionFileViewer:
 
         return processed_pages
 
-    def is_previewable_url(url: str) -> str:
-        """
-        Notionがプレビュー対応しているサービスのURLか判定し、
-        'image', 'video', 'embed' のいずれかを返す（該当しなければNone）
-        """
-        import re
-        # Google Drive /埋め込み であればembed
-        if re.search(r"drive.google.com/.+/埋め込み", url):
-            return 'embed'
-        # YouTube, Vimeo, Twitter, imgur, Dropbox, SoundCloud など
-        if re.search(r"(youtube.com|youtu.be)", url):
-            return 'video'
-        if re.search(r"(vimeo.com)", url):
-            return 'video'
-        if re.search(r"(imgur.com|unsplash.com|images.unsplash.com)", url):
-            return 'image'
-        if re.search(r"(dropbox.com)", url):
-            return 'image'
-        if re.search(r"(twitter.com|soundcloud.com)", url):
-            return 'embed'
-        return None
+def is_previewable_url(url: str) -> str:
+    """
+    Notionがプレビュー対応しているサービスのURLか判定し、
+    'image', 'video', 'embed' のいずれかを返す（該当しなければNone）
+    """
+    import re
+    # Google Drive /preview であればembed
+    if re.search(r"drive.google.com/.+/preview", url):
+        return 'embed'
+    # YouTube, Vimeo, Twitter, imgur, Dropbox, SoundCloud など
+    if re.search(r"(youtube.com|youtu.be)", url):
+        return 'video'
+    if re.search(r"(vimeo.com)", url):
+        return 'video'
+    if re.search(r"(imgur.com|unsplash.com|images.unsplash.com)", url):
+        return 'image'
+    if re.search(r"(dropbox.com)", url):
+        return 'image'
+    if re.search(r"(twitter.com|soundcloud.com)", url):
+        return 'embed'
+    # 画像拡張子
+    if re.search(r"\\.(jpg|jpeg|png|gif|webp|svg)(\\?|$)", url, re.IGNORECASE):
+        return 'image'
+    # 動画拡張子
+    if re.search(r"\\.(mp4|webm|ogg|mov)(\\?|$)", url, re.IGNORECASE):
+        return 'video'
+    # 音声拡張子
+    if re.search(r"\\.(mp3|wav|ogg|m4a)(\\?|$)", url, re.IGNORECASE):
+        return 'embed'
+    return None
