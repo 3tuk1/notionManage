@@ -86,9 +86,10 @@ def download_and_upload_file_to_notion(file_url, file_name):
         # NotionにファイルをアップロードするAPI
         upload_url = "https://api.notion.com/v1/files"
 
-        # ファイルアップロード用のヘッダー（Content-Typeを変更）
+        # ファイルアップロード用のヘッダー（requestsライブラリがContent-Typeを自動設定するため削除）
         upload_headers = headers.copy()
-        upload_headers["Content-Type"] = "multipart/form-data"
+        if 'Content-Type' in upload_headers:
+            del upload_headers['Content-Type']
 
         # ファイルをアップロード
         with open(temp_path, 'rb') as f:
