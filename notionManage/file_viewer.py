@@ -778,29 +778,46 @@ class NotionFileViewer:
                         new_props[date_column_key] = {'date': {'start': ct}}
                     continue
 
-                # --- 「アップロード予定のファイル」を「カテゴリ」列にコピーする特別処理 (デバッグ版) ---
-                if k.strip() == "アップロード予定のファイル":  # ★★★ k を k.strip() に変更 ★★★
-                    print("!!! 'アップロード予定のファイル' プロパティを検出しました !!!")
-                    category_key = self.data_manage_tablekey.get("カテゴリ") or "カテゴリ"
-                    print(f"    -> コピー先のキー名: '{category_key}'")
+                # --- 「アップロード予定のファイル」を「カテゴリ」列にコピーする特別処理 (最終デバッグ版) ---
+                # 文字列の一部が含まれているかどうかで、より広くチェックする
+                if "アップロード予定" in k:
+                    print("\n--- !!! ULTIMATE DEBUG FOR POTENTIAL MATCH !!! ---")
 
-                    if prop_type == "relation":
-                        print("    -> タイプは 'relation' で正しいです。")
-                        relation_value = v.get("relation")
+                    # コード内のターゲット文字列を定義
+                    target_string = "アップロード予定のファイル"
 
-                        if category_key in data_manage_keys:
-                            print(f"    -> コピー先に '{category_key}' が存在します。")
-                            if relation_value:
-                                print(f"    -> コピーする値: {relation_value}")
-                                new_props[category_key] = {"relation": relation_value}
-                            else:
-                                print("    -> 警告: コピーする値がありません（リレーションが空です）。")
-                        else:
-                            print(f"    -> ★エラー: コピー先に '{category_key}' という名前の列が見つかりません。")
+                    # 1. 見た目の比較
+                    print(f"  [Visual Compare]")
+                    print(f"    - From Notion API (k): '{k}'")
+                    print(f"    - From Code (target) : '{target_string}'")
+
+                    # 2. 文字数の比較
+                    print(f"  [Length Compare]")
+                    print(f"    - len(k)          : {len(k)}")
+                    print(f"    - len(k.strip())    : {len(k.strip())}")
+                    print(f"    - len(target)       : {len(target_string)}")
+
+                    # 3. バイト表現の比較 (これが最も重要)
+                    print(f"  [Byte-level Compare (UTF-8)]")
+                    print(f"    - k      -> {k.encode('utf-8')}")
+                    print(f"    - target -> {target_string.encode('utf-8')}")
+
+                    # 4. 最終的な一致判定の結果
+                    if k.strip() == target_string:
+                        print("  [Result] -> MATCHED! This block should have worked.")
                     else:
-                        print(f"    -> ★エラー: プロパティタイプが 'relation' ではありません (実際のタイプ: '{prop_type}')。")
+                        print("  [Result] -> NOT MATCHED. Please check the Byte-level output above for subtle differences.")
 
-                    continue # このプロパティの処理は完了
+                    print("--- !!! END OF ULTIMATE DEBUG !!! ---\n")
+
+                    # 元のロジックも念のため実行
+                    if k.strip() == target_string:
+                        category_key = self.data_manage_tablekey.get("カテゴリ") or "カテゴリ"
+                        if prop_type == "relation":
+                            relation_value = v.get("relation")
+                            if category_key in data_manage_keys and relation_value:
+                                new_props[category_key] = { "relation": relation_value }
+                        continue
 
                 # 4. コピー不要なプロパティをスキップ
                 if prop_type in ('title', 'created_by', 'last_edited_by', 'last_edited_time'):
