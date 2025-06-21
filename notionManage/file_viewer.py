@@ -6,22 +6,33 @@ from typing import Dict, List, Optional, Any, Union, Tuple
 from urllib.request import urlopen
 
 from .notion_client import NotionClient
+from .google_drive import GoogleDriveClient
 
 
 class NotionFileViewer:
     """Notionのファイル表示用クラス"""
 
-    def __init__(self, token: str = None):
+    def __init__(self, token: str = None, google_service_account_key: str = None):
         """
         初期化
 
         Args:
             token: Notion API トークン (Noneの場合は環境変数から取得)
+            google_service_account_key: Google Driveサービスアカウントのキー
         """
         # ハードコードされたカラムIDを設定（環境変数から取得できない場合のフォールバック）
         self.upload_column_id = "Sb%3Au"  # アップロードカラムのID
 
         self.client = NotionClient(token)
+
+        # Google Driveクライアントを初期化（サービスアカウントキーが指定されている場合）
+        self.google_drive_client = None
+        try:
+            self.google_drive_client = GoogleDriveClient(google_service_account_key)
+            print("Google Driveへのアップロード機能が有効です")
+        except Exception as e:
+            print(f"Google Drive機能は無効です: {e}")
+            print("注意: Google Drive機能がない場合、ファイルの埋め込みが正しく表示されない可能性があります")
 
         # repository secretsからテーブルキーを読み込み
         self.uploadform_tablekey = self._load_table_keys("UPLOADFORM_TABLEKEY")
@@ -334,6 +345,45 @@ class NotionFileViewer:
 
         return False
 
+    def _upload_to_drive(self, file_data: Dict) -> Dict:
+        """
+        ファイルをGoogle Driveにアップロード
+
+        Args:
+            file_data: ファイル情報
+
+        Returns:
+            更新されたファイル情報（Google DriveのURL付き）
+        """
+        # Google Driveクライアントが利用可能かチェック
+        if not self.google_drive_client:
+            print("警告: Google Driveクライアントが初期化されていません。元のURLを使用します。")
+            return file_data
+
+        try:
+            file_url = file_data.get("url", "")
+            file_name = file_data.get("name", "Unnamed")
+            file_type = file_data.get("type", "")
+
+            print(f"ファイル '{file_name}' をGoogle Driveにアップロード中...")
+
+            # Google Driveにアップロード
+            file_id, embed_url = self.google_drive_client.upload_file_from_url(file_url, file_name, file_type)
+
+            # 更新したURLをファイルデータに追加
+            updated_file_data = dict(file_data)
+            updated_file_data["original_url"] = file_url
+            updated_file_data["url"] = embed_url
+            updated_file_data["google_drive_id"] = file_id
+
+            print(f"Google Driveへのアップロード成功: {embed_url}")
+
+            return updated_file_data
+        except Exception as e:
+            print(f"Google Driveへのアップロードに失敗しました: {e}")
+            print("元のURLを使用します。")
+            return file_data
+
     def create_file_blocks_for_notion(self, file_data: Dict) -> List[Dict]:
         """
         ファイル情報からNotionブロックを作成
@@ -349,23 +399,25 @@ class NotionFileViewer:
         file_url = file_data.get("url", "")
         file_name = file_data.get("name", "Unnamed")
 
+        # Google Driveが利用可能な場合は、ファイルをアップロードしてURLを置き換え
+        if self.google_drive_client:
+            drive_file_data = self._upload_to_drive(file_data)
+            file_url = drive_file_data.get("url")
+
         print(f"ファイル '{file_name}' のブロック作成 (タイプ: {file_type})")
 
         # ファイル種類によって異なるブロックを作成
         if "image" in file_type:
             print(f"画像ファイルとして処理: {file_url}")
-            # 画像ブロック
-            image_block = {
+            # 埋め込みブロック
+            embed_block = {
                 "object": "block",
-                "type": "image",
-                "image": {
-                    "type": "external",
-                    "external": {
-                        "url": file_url
-                    }
+                "type": "embed",
+                "embed": {
+                    "url": file_url
                 }
             }
-            blocks.append(image_block)
+            blocks.append(embed_block)
 
             # キャプションは別のパラグラフブロックで表示
             caption_block = {
@@ -385,33 +437,15 @@ class NotionFileViewer:
         elif "video" in file_type:
             print(f"動画ファイルとして処理: {file_url}")
 
-            # 一般的な動画形式の場合はパラグラフにリンクを埋め込み
-            if file_url.endswith(('.mp4', '.mov', '.webm')):
-                # 動画へのリンクを含むパラグラフ
-                video_link_block = {
-                    "object": "block",
-                    "type": "paragraph",
-                    "paragraph": {
-                        "rich_text": [{
-                            "type": "text",
-                            "text": {
-                                "content": "動画を見る（クリックして開く）",
-                                "link": {"url": file_url}
-                            }
-                        }]
-                    }
+            # 埋め込みブロック
+            embed_block = {
+                "object": "block",
+                "type": "embed",
+                "embed": {
+                    "url": file_url
                 }
-                blocks.append(video_link_block)
-            else:
-                # 一般的な埋め込みブロック
-                embed_block = {
-                    "object": "block",
-                    "type": "embed",
-                    "embed": {
-                        "url": file_url
-                    }
-                }
-                blocks.append(embed_block)
+            }
+            blocks.append(embed_block)
 
             # 動画のタイトルを表示
             title_block = {
@@ -431,21 +465,15 @@ class NotionFileViewer:
         elif "audio" in file_type:
             print(f"音声ファイルとして処理: {file_url}")
 
-            # 音声ファイルへのリンクを含むパラグラフ
-            audio_link_block = {
+            # 埋め込みブロック
+            embed_block = {
                 "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{
-                        "type": "text",
-                        "text": {
-                            "content": "音声ファイルを聴く（クリックして開く）",
-                            "link": {"url": file_url}
-                        }
-                    }]
+                "type": "embed",
+                "embed": {
+                    "url": file_url
                 }
             }
-            blocks.append(audio_link_block)
+            blocks.append(embed_block)
 
             # 音声ファイル名を表示
             caption_block = {

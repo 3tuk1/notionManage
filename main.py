@@ -108,9 +108,16 @@ def main():
         print("環境変数 NOTION_API_KEY が設定されていません。")
         return
 
+    # Google Driveサービスアカウントキーを取得
+    gdrive_key = os.environ.get("GDRIVE_KEY")
+    if gdrive_key:
+        print("Google Drive機能が有効です")
+    else:
+        print("Google Drive機能は無効です (GDRIVE_KEY環境変数が設定されていません)")
+
     try:
-        # ファイルビューアーの初期化
-        viewer = NotionFileViewer(token)
+        # ファイルビューアーの初期化 (Google Drive機能も初期化)
+        viewer = NotionFileViewer(token=token, google_service_account_key=gdrive_key)
 
         if args.embed:
             print(f"uploadformテーブル (ID: {database_id}) の全ページにファイルを埋め込みます...")
