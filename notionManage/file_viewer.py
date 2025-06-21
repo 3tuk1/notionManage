@@ -747,55 +747,45 @@ class NotionFileViewer:
                 new_props["名前"] = {"title": [{"type": "text", "text": {"content": page_id}}]}
 
             for k, v in properties.items():
-                print(f"Processing property: {k}, Value: {v}")  # プロパティのログ出力
-                # ファイルプロパティ識別をIDで行う
-                if v.get('id') == upload_key:
-                    files_list = v.get("files", [])
+                prop_id = v.get('id')
+                prop_type = v.get('type')
+
+                # 1. ファイルアップロード処理
+                if prop_id == upload_key:
+                    files_list = v.get('files', [])
                     if files_list:
                         file_info = files_list[0]
-                        file_name = file_info.get("name")
-                        temp_notion_url = file_info.get("file", {}).get("url")
-                        if temp_notion_url and file_name:
+                        file_name = file_info.get('name')
+                        temp_url = file_info.get('file', {}).get('url')
+                        if temp_url and file_name:
                             try:
                                 print(f"'{file_name}' をGoogle Driveにアップロードしています...")
-                                _, drive_url = self.google_drive_client.upload_file_from_url(temp_notion_url, file_name)
-                                new_props[file_column_key] = {"url": drive_url}
+                                _, drive_url = self.google_drive_client.upload_file_from_url(temp_url, file_name)
+                                new_props[file_column_key] = {'url': drive_url}
                                 print(f"アップロード成功。Drive URL: {drive_url}")
                             except Exception as e:
                                 print(f"ファイル '{file_name}' のアップロード中にエラーが発生しました: {e}")
                     continue
-                if k == "提出日時" and date_column_key in data_manage_keys:
-                    # 提出日時を設定
-                    date_val = v.get("date")
-                    if date_val and date_val.get("start"):
-                        new_props[date_column_key] = {"date": {"start": date_val["start"]}}
-                    continue
-                if k == "プロジェクト管理テーブル" and category_column_key in data_manage_keys:
-                    # プロジェクト管理テーブルのデータを設定
-                    category_val = v.get("select")
-                    if category_val:
-                        new_props[category_column_key] = {"select": category_val}
-                    continue
-                if k not in data_manage_keys:
-                    continue  # コピー先にないプロパティはスキップ
 
-                prop_type = v.get("type")
-                if prop_type in ("created_time", "last_edited_time"):
+                # 2. コピー先テーブルに存在しないプロパティはスキップ
+                if k not in data_manage_keys:
                     continue
-                if prop_type == "date":
-                    date_val = v.get("date")
-                    if date_val and date_val.get("start"):
-                        new_props[k] = {"date": {"start": date_val["start"]}}
-                elif prop_type == "title":
-                    continue  # 名前は上書きするのでスキップ
-                elif prop_type == "rich_text":
-                    rich_val = v.get("rich_text")
-                    if rich_val:
-                        new_props[k] = {"rich_text": rich_val}
-                elif prop_type == "select":
-                    select_val = v.get("select")
-                    if select_val:
-                        new_props[k] = {"select": select_val}
+
+                # 3. 提出日時(created_time)を date 型へ変換
+                if k == '提出日時' and prop_type == 'created_time':
+                    ct = v.get('created_time')
+                    if ct:
+                        new_props[date_column_key] = {'date': {'start': ct}}
+                    continue
+
+                # 4. コピー不要なプロパティをスキップ
+                if prop_type in ('title', 'created_by', 'last_edited_by', 'last_edited_time'):
+                    continue
+
+                # 5. その他のプロパティを汎用コピー
+                val = v.get(prop_type)
+                if val is not None:
+                    new_props[k] = {prop_type: val}
 
             # コピー先データベースに新しいプロパティを追加
             create_url = f"https://api.notion.com/v1/pages"
