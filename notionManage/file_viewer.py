@@ -780,6 +780,7 @@ class NotionFileViewer:
 
                 # --- 「アップロード予定のファイル」を「カテゴリ」列にコピーする特別処理 ---
                 if k == "アップロード予定のファイル":
+                    print("★ 特殊処理: アップロード予定のファイル を検出 ★", prop_type, v)
                     category_key = self.data_manage_tablekey.get("カテゴリ") or "カテゴリ"
                     if prop_type == "relation":
                         relation_value = v.get("relation")
