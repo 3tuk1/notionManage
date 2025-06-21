@@ -41,3 +41,4 @@ jobs:
           UPLOADFORM_TABLEKEY: ${{ secrets.UPLOADFORM_TABLEKEY }}
           DATA_MANAGE_TABLEKEY: ${{ secrets.DATA_MANAGE_TABLEKEY }}
           UPLOADFORM_DB_ID: ${{ secrets.UPLOADFORM_DB_ID }}
+          GDRIVE_KEY: ${{ secrets.GDRIVE_KEY }}
