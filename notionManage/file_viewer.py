@@ -805,7 +805,20 @@ class NotionFileViewer:
             if response.status_code not in (200, 201):
                 raise Exception(f"Failed to create page: {response.status_code}, {response.text}")
 
-            copied_count += 1
+            # ページ作成と、成功した場合の元ページ削除処理
+            if new_props:
+                try:
+                    self.client.create_page(parent_db_id=data_manage_db_id, properties=new_props)
+                    #print(f"ページ '{title}' をコピーしました。")
+
+                    # --- ★ここからが追加された処理★ ---
+                    self.client.archive_page(page_id)
+                    print(f"元のページ (ID: {page_id}) を削除しました。")
+                    # --- ★ここまで★ ---
+
+                    copied_count += 1
+                except Exception as e:
+                    #print(f"ページ '{title}' のコピーまたは削除中にエラーが発生しました: {e}")
 
         return copied_count
 def is_previewable_url(url: str) -> str:
