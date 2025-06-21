@@ -4,6 +4,7 @@ import mimetypes
 import os
 from typing import Dict, List, Optional, Any, Union, Tuple
 from urllib.request import urlopen
+import requests
 
 from .notion_client import NotionClient
 from .google_drive import GoogleDriveClient
@@ -613,6 +614,47 @@ class NotionFileViewer:
 
         return processed_pages
 
+    def migrate_nonfile_properties(self, uploadform_db_id: str, data_manage_db_id: str) -> int:
+        """
+        UPLOADFORM_TABLEからファイル以外の要素をDATA_MANAGE_TABLEに移動し、元データを削除する
+
+        Args:
+            uploadform_db_id: アップロードフォームテーブルのDB ID
+            data_manage_db_id: データ管理テーブルのDB ID
+        Returns:
+            移動した件数
+        """
+        # 全ページ取得
+        results = self.client.query_database(uploadform_db_id)
+        moved_count = 0
+        upload_key = self.uploadform_tablekey.get("アップロード")
+        for page in results.get("results", []):
+            page_id = page.get("id")
+            properties = page.get("properties", {})
+            # ファイル以外のプロパティのみ抽出
+            new_props = {}
+            for k, v in properties.items():
+                if k == upload_key:
+                    continue
+                new_props[k] = v
+            # 空ならスキップ
+            if not new_props:
+                continue
+            # 新規ページ作成
+            create_url = f"https://api.notion.com/v1/pages"
+            payload = {
+                "parent": {"database_id": data_manage_db_id},
+                "properties": new_props
+            }
+            resp = requests.post(create_url, headers=self.client.headers, json=payload)
+            if resp.status_code == 200 or resp.status_code == 201:
+                # 元ページ削除
+                delete_url = f"https://api.notion.com/v1/pages/{page_id}"
+                requests.delete(delete_url, headers=self.client.headers)
+                moved_count += 1
+            else:
+                print(f"データ移動失敗: {resp.text}")
+        return moved_count
 def is_previewable_url(url: str) -> str:
     """
     Notionがプレビュー対応しているサービスのURLか判定し、
@@ -622,6 +664,9 @@ def is_previewable_url(url: str) -> str:
     # Google Drive /preview であればembed
     if re.search(r"drive.google.com/.+/preview", url):
         return 'embed'
+    # Google Drive 画像直リンク（uc?export=view&id=...）はimage
+    if re.search(r"drive.google.com/uc\?export=view&id=", url):
+        return 'image'
     # YouTube, Vimeo, Twitter, imgur, Dropbox, SoundCloud など
     if re.search(r"(youtube.com|youtu.be)", url):
         return 'video'
