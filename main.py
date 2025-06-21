@@ -128,6 +128,16 @@ def main():
             print(f"{copied}件コピーしました。")
             return
 
+        # テーブルのプロパティ一覧をログ出力
+        print("\n=== UPLOADFORM_TABLE properties ===")
+        uploadform_props = viewer.client.retrieve_database(database_id).get('properties', {})
+        for k, v in uploadform_props.items():
+            print(f"{k}: {v.get('type')}")
+        print("\n=== DATA_MANAGE_TABLE properties ===")
+        data_manage_props = viewer.client.retrieve_database(data_manage_db_id).get('properties', {})
+        for k, v in data_manage_props.items():
+            print(f"{k}: {v.get('type')}")
+
         if args.embed:
             print(f"uploadformテーブル (ID: {database_id}) の全ページにファイルを埋め込みます...")
             # Notionページに直接ファイルを埋め込む（常に全ページ処理）
