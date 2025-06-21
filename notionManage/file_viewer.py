@@ -795,31 +795,14 @@ class NotionFileViewer:
                 if val is not None:
                     new_props[k] = {prop_type: val}
 
-            # コピー先データベースに新しいプロパティを追加
-            create_url = f"https://api.notion.com/v1/pages"
-            payload = {
-                "parent": {"database_id": data_manage_db_id},
-                "properties": new_props
-            }
-            response = requests.post(create_url, headers=self.client.headers, json=payload)
-            if response.status_code not in (200, 201):
-                raise Exception(f"Failed to create page: {response.status_code}, {response.text}")
-
             # ページ作成と、成功した場合の元ページ削除処理
             if new_props:
                 try:
                     self.client.create_page(parent_db_id=data_manage_db_id, properties=new_props)
-                    #print(f"ページ '{title}' をコピーしました。")
-
-                    # --- ★ここからが追加された処理★ ---
                     self.client.archive_page(page_id)
-                    print(f"元のページ (ID: {page_id}) を削除しました。")
-                    # --- ★ここまで★ ---
-
                     copied_count += 1
                 except Exception as e:
                     print(f"ページのコピーまたは削除中にエラーが発生しました: {e}")
-                    # エラーが発生しても処理を続行するためにpass
                     pass
 
         return copied_count
