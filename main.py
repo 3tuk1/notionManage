@@ -9,27 +9,66 @@ def get_default_db_id():
     環境変数からNotionデータベースIDを取得
 
     まずUPLOADFORM_DB_IDから直接取得を試み、
-    なければUPLOADFORM_TABLEKEYから関連情報を抽出
+    なければUPLOADFORM_TABLEKEYを使用
     """
     # 直接設定されているデータベースIDを確認
     direct_db_id = os.environ.get("UPLOADFORM_DB_ID", "")
     if direct_db_id:
+        print(f"UPLOADFORM_DB_IDから取得したデータベースID: {direct_db_id}")
         return direct_db_id
 
     # UPLOADFORM_TABLEKEYからデータベースIDを取得
     try:
-        table_key_json = os.environ.get("UPLOADFORM_TABLEKEY", "{}")
-        table_key = json.loads(table_key_json)
+        table_key = os.environ.get("UPLOADFORM_TABLEKEY", "")
+        if not table_key:
+            print("UPLOADFORM_TABLEKEYが設定されていません")
+            return ""
 
-        # 関係カラムからデータベースIDを抽出
-        for column_name, column_data in table_key.items():
-            column_type = column_data.get("type", "")
-            if column_type == "relation":
-                relation_data = column_data.get("relation", {})
-                if relation_data:
-                    return relation_data.get("database_id", "")
+        # 先頭と末尾の空白文字を削除
+        table_key = table_key.strip()
+
+        # テーブルキーが単純な文字列の場合はそのまま使用
+        if (len(table_key) > 30 and
+            not table_key.startswith('{') and
+            not table_key.startswith('[') and
+            not table_key.startswith('"')):
+            print(f"テーブルキーをデータベースIDとして使用: {table_key}")
+            return table_key
+
+        # 以下は従来のJSON解析ロジック（必要に応じて）
+        print(f"処理するJSONデータ（先頭50文字）: {table_key[:50]}...")
+
+        # JSONを解析
+        table_key = json.loads(table_key)
+
+        print("JSONデータのパース成功")
+
+        # 辞書形式の場合
+        if isinstance(table_key, dict):
+            # 関係カラムからデータベースIDを抽出
+            for column_name, column_data in table_key.items():
+                if isinstance(column_data, dict):
+                    column_type = column_data.get("type", "")
+                    if column_type == "relation":
+                        relation_data = column_data.get("relation", {})
+                        if relation_data and isinstance(relation_data, dict):
+                            db_id = relation_data.get("database_id", "")
+                            if db_id:
+                                print(f"抽出したデータベースID: {db_id}")
+                                return db_id
+        # リスト形式の場合は最初の要素を使用
+        elif isinstance(table_key, list) and len(table_key) > 0:
+            print("JSONデータはリスト形式です")
+            for item in table_key:
+                if isinstance(item, dict) and "database_id" in item:
+                    db_id = item.get("database_id")
+                    print(f"リストから抽出したデータベースID: {db_id}")
+                    return db_id
+
+        print("データベースIDを抽出できませんでした")
     except Exception as e:
-        print(f"UPLOADFORM_TABLEKEYの解析エラー: {e}")
+        print(f"UPLOADFORM_TABLEKEYの処理エラー: {e}")
+        print(f"UPLOADFORM_TABLEKEYの内容: {table_key if 'table_key' in locals() else 'なし'}")
 
     return ""
 
