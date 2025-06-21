@@ -750,7 +750,19 @@ class NotionFileViewer:
                 prop_id = v.get('id')
                 prop_type = v.get('type')
                 print(f"DEBUG [migrate_and_copy] property: {k}, id: {prop_id}, type: {prop_type}")
-                # 1. ファイルアップロード処理
+                # 先に「アップロード予定」から「カテゴリ」へのマッピング処理を行う
+                if "アップロード予定" in k:
+                    if k.strip() == "アップロード予定のファイル":
+                        category_key = self.data_manage_tablekey.get("カテゴリ") or "カテゴリ"
+                        if prop_type == "relation":
+                            relation_value = v.get("relation")
+                            # コピー先のキーが存在し、かつリレーションの値が空でないことを確認
+                            if category_key in data_manage_keys and relation_value:
+                                new_props[category_key] = { "relation": relation_value }
+                        # このプロパティの処理は完了したので、次のプロパティに進む
+                        continue
+
+                # ファイルのアップロード処理 (元のコードのまま)
                 if prop_id == upload_key:
                     files_list = v.get('files', [])
                     if files_list:
@@ -767,25 +779,21 @@ class NotionFileViewer:
                                 print(f"ファイル '{file_name}' のアップロード中にエラーが発生しました: {e}")
                     continue
 
-                # --- 汎用的なプロパティマッピング処理に置き換え ---
-                # 環境変数で定義されたマッピングを使用してプロパティを変換
-                mapped_key = self.data_manage_tablekey.get(k) or k
-
                 # コピー先テーブルに存在しないプロパティはスキップ
-                if mapped_key not in data_manage_keys:
+                if k not in data_manage_keys:
                     continue
 
                 # 提出日時(created_time)を date 型へ変換
                 if prop_type == 'created_time':
                     ct = v.get('created_time')
                     if ct:
-                        new_props[mapped_key] = {'date': {'start': ct}}
+                        new_props[k] = {'date': {'start': ct}}
                     continue
 
                 # その他のプロパティを汎用コピー
                 val = v.get(prop_type)
                 if val is not None:
-                    new_props[mapped_key] = {prop_type: val}
+                    new_props[k] = {prop_type: val}
 
             # コピー先データベースに新しいプロパティを追加
             create_url = f"https://api.notion.com/v1/pages"
