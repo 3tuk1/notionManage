@@ -1,0 +1,50 @@
+name: Notion Files Embedding
+
+on:
+  schedule:
+    # 毎日午前6時に実行（UTC時間、日本時間だと15時）
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    # 手動実行用
+    inputs:
+      database_id:
+        description: '特定のデータベースIDを指定（省略時はデフォルト値を使用）'
+        required: false
+      page_id:
+        description: '特定のページIDを指定（省略時は全ページ処理）'
+        required: false
+
+jobs:
+  embed-files:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v3
+
+      - name: Python環境のセットアップ
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: 依存関係のインストール
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Notionページへのファイル埋め込み実行
+        run: |
+          # データベースIDを設定（パラメーターか環境変数から取得）
+          DB_ID="${{ github.event.inputs.database_id || secrets.DEFAULT_DATABASE_ID }}"
+          
+          # ページIDが指定されていればそれを使用
+          if [ "${{ github.event.inputs.page_id }}" != "" ]; then
+            python main.py --database_id $DB_ID --page_id ${{ github.event.inputs.page_id }} --embed
+          else
+            python main.py --database_id $DB_ID --embed
+          fi
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          UPLOADFORM_TABLEKEY: ${{ secrets.UPLOADFORM_TABLEKEY }}
+          DATA_MANAGE_TABLEKEY: ${{ secrets.DATA_MANAGE_TABLEKEY }}
