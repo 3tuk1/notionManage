@@ -92,17 +92,24 @@ class GoogleDriveClient:
         if parent_id:
             query += f" and '{parent_id}' in parents"
 
-        results = self.service.files().list(
-            q=query,
-            spaces='drive',
-            fields='files(id, name)'
-        ).execute()
+        try:
+            results = self.service.files().list(
+                q=query,
+                spaces='drive',
+                fields='files(id, name)'
+            ).execute()
 
-        items = results.get('files', [])
+            items = results.get('files', [])
 
-        if items:
-            return items[0]['id']
-        return None
+            if items:
+                return items[0]['id']
+            else:
+                print(f"フォルダ '{folder_name}' が見つかりませんでした。")
+                return None
+
+        except Exception as e:
+            print(f"フォルダ検索中にエラーが発生しました: {e}")
+            return None
 
     def _create_folder(self, folder_name: str, parent_id: Optional[str] = None) -> str:
         """

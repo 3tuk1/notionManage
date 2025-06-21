@@ -103,7 +103,7 @@ class NotionClient:
 
         return all_blocks
 
-    def delete_block(self, block_id: str) -> Dict:
+    def delete_block(self, block_id: str) -> Optional[Dict]:
         """
         ブロックを削除する
 
@@ -111,12 +111,17 @@ class NotionClient:
             block_id: 削除するブロックのID
 
         Returns:
-            APIレスポンス
+            APIレスポンスまたはNone（エラー時）
         """
         url = f"{self.base_url}/blocks/{block_id}"
-        response = requests.delete(url, headers=self.headers)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = requests.delete(url, headers=self.headers)
+            response.raise_for_status()
+            print(f"ブロック (ID: {block_id}) の削除に成功しました")
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"ブロック (ID: {block_id}) の削除に失敗しました: {e}")
+            return None
 
     def get_file_url(self, file_object: Dict) -> str:
         """
