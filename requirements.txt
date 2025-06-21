@@ -3,3 +3,5 @@ google-api-python-client>=2.88.0
 google-auth>=2.19.0
 google-auth-httplib2>=0.1.0
 google-auth-oauthlib>=1.0.0
+
+protobuf~=6.31.1

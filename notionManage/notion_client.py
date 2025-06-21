@@ -1,6 +1,6 @@
 import os
 import requests
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 class NotionClient:
     """Notion APIクライアント"""
