@@ -4,10 +4,11 @@ import re
 import uuid
 from urllib.parse import urlparse, parse_qs
 import tempfile
+import mimetypes
 
-NOTION_API_KEY = os.environ.get('NOTION_API_KEY')
-DATA_MANAGE_TABLEKEY = os.environ.get('DATA_MANAGE_TABLEKEY')
-UPLOADFORM_TABLEKEY = os.environ.get('UPLOADFORM_TABLEKEY')
+NOTION_API_KEY = os.environ.get('NOTION_API_KEY', '').strip()
+DATA_MANAGE_TABLEKEY = os.environ.get('DATA_MANAGE_TABLEKEY', '').strip()
+UPLOADFORM_TABLEKEY = os.environ.get('UPLOADFORM_TABLEKEY', '').strip()
 
 NOTION_API_URL = 'https://api.notion.com/v1/'
 NOTION_VERSION = '2022-06-28'
@@ -80,72 +81,61 @@ def download_and_upload_file_to_notion(file_url, file_name):
             for chunk in file_response.iter_content(chunk_size=8192):
                 if chunk:
                     temp_file.write(chunk)
-
         print(f"一時ファイルに保存: {temp_path}")
 
-        # NotionにファイルをアップロードするAPI
-        upload_url = "https://api.notion.com/v1/files"
+        # コンテンツタイプを推測
+        content_type, _ = mimetypes.guess_type(file_name)
+        if content_type is None:
+            content_type = "application/octet-stream"
 
-        # ファイルアップロード用のヘッダー（requestsライブラリがContent-Typeを自動設定するため削除）
-        upload_headers = headers.copy()
-        if 'Content-Type' in upload_headers:
-            del upload_headers['Content-Type']
+        # Notionにアップロードするための情報を取得
+        get_upload_url_payload = {
+            "name": file_name,
+            "content_type": content_type
+        }
 
-        # ファイルをアップロード
+        get_upload_url_response = requests.post(
+            f"{NOTION_API_URL}files",
+            headers=headers,
+            json=get_upload_url_payload
+        )
+
+        if get_upload_url_response.status_code != 200:
+            print(f"ファイルアップロードURLの取得に失敗: {get_upload_url_response.text}")
+            os.unlink(temp_path)
+            return None
+
+        upload_data = get_upload_url_response.json()
+        upload_url = upload_data.get("upload_url")
+        permanent_notion_url = upload_data.get("file_url")
+
+        if not upload_url or not permanent_notion_url:
+            print(f"アップロードURLまたは永続URLが見つかりません: {upload_data}")
+            os.unlink(temp_path)
+            return None
+
+        # S3にファイルをアップロード
         with open(temp_path, 'rb') as f:
-            files = {
-                'file': (file_name, f, 'application/octet-stream'),
-                'type': (None, 'file'),
-                'name': (None, file_name)
-            }
-            print(f"Notionにファイルをアップロード中: {file_name}")
+            # S3へのアップロードにはNotionの認証ヘッダーは不要
+            s3_headers = {"Content-Type": content_type}
+            s3_upload_response = requests.put(upload_url, data=f, headers=s3_headers)
 
-            # Notionへのファイルアップロードリクエスト（S3へのプリサインドURL取得）
-            presigned_response = requests.post(
-                "https://api.notion.com/v1/files",
-                headers=upload_headers,
-                files=files
-            )
-
-            if presigned_response.status_code != 200:
-                print(f"ファイルアップロードURLの取得に失敗: {presigned_response.text}")
-                os.unlink(temp_path)
-                return None
-
-            presigned_data = presigned_response.json()
-            presigned_url = presigned_data.get('url')
-
-            if not presigned_url:
-                print("プリサインドURLが見つかりません")
-                os.unlink(temp_path)
-                return None
-
-            # S3にファイルをアップロード
-            with open(temp_path, 'rb') as f:
-                s3_upload = requests.put(
-                    presigned_url,
-                    data=f,
-                    headers={"Content-Type": "application/octet-stream"}
-                )
-
-                if s3_upload.status_code not in [200, 201]:
-                    print(f"S3へのファイルアップロードに失敗: {s3_upload.status_code}")
-                    os.unlink(temp_path)
-                    return None
-
-        # 一時ファイル削除
+        # 一時ファイルを削除
         os.unlink(temp_path)
 
-        # 永続的なNotionファイルURL
-        permanent_file_url = presigned_data.get('url')
-        print(f"永続ファイルURLを取得: {permanent_file_url}")
+        if s3_upload_response.status_code != 200:
+            print(f"S3へのファイルアップロードに失敗: {s3_upload_response.status_code} - {s3_upload_response.text}")
+            return None
 
-        return permanent_file_url
+        print(f"S3へのアップロード成功: {file_name}")
+        print(f"永続ファイルURLを取得: {permanent_notion_url}")
+        return permanent_notion_url
+
     except Exception as e:
         print(f"ファイル処理中にエラーが発生: {e}")
         # 一時ファイルがあれば削除
         try:
-            if 'temp_path' in locals():
+            if 'temp_path' in locals() and os.path.exists(temp_path):
                 os.unlink(temp_path)
         except:
             pass
